@@ -1,0 +1,11 @@
+[package]
+name = "mong-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mong-core = { path = "../../crates/mong-core" }
+mong-script = { path = "../../crates/mong-script" }
+mong-assets = { path = "../../crates/mong-assets" }
+serde_json = { workspace = true }

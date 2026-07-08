@@ -1,0 +1,221 @@
+[
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "mo_dau"
+      },
+      {
+        "ev": "scene_changed",
+        "scene": "quan_ca_phe",
+        "transition": null
+      },
+      {
+        "asset": "nhac_quan",
+        "ev": "bgm"
+      },
+      {
+        "asset": "chuong_cua",
+        "ev": "sfx"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "mo_dau.l1"
+      }
+    ],
+    "input": "start"
+  },
+  {
+    "events": [
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": "left",
+          "pose": "thuong",
+          "sfx": null
+        },
+        "speaker": "lan",
+        "text": "mo_dau.l2"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "arms": [
+          {
+            "index": 0,
+            "text": "mo_dau.c1"
+          },
+          {
+            "index": 1,
+            "text": "mo_dau.c2"
+          }
+        ],
+        "ev": "choices"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "bat_chuyen"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": "right",
+          "pose": "cuoi",
+          "sfx": null
+        },
+        "speaker": "minh",
+        "text": "bat_chuyen.l1"
+      }
+    ],
+    "input": "choose 0"
+  },
+  {
+    "events": [
+      {
+        "arms": [
+          {
+            "index": 0,
+            "text": "mo_dau.c1"
+          },
+          {
+            "index": 1,
+            "text": "mo_dau.c2"
+          }
+        ],
+        "ev": "choices"
+      }
+    ],
+    "input": "rollback"
+  },
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "lang_tranh"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "lang_tranh.l1"
+      }
+    ],
+    "input": "choose 1"
+  },
+  {
+    "events": [
+      {
+        "ev": "say",
+        "opts": {
+          "exit": true,
+          "pos": "left",
+          "pose": "thuong",
+          "sfx": null
+        },
+        "speaker": "lan",
+        "text": "lang_tranh.l2"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "loi_moi"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "loi_moi.l1"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": "left",
+          "pose": "thuong",
+          "sfx": null
+        },
+        "speaker": "lan",
+        "text": "loi_moi.l2"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "arms": [
+          {
+            "index": 0,
+            "text": "loi_moi.c2"
+          }
+        ],
+        "ev": "choices"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "ket_thuong"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "ket_thuong.l1"
+      }
+    ],
+    "input": "choose 0"
+  },
+  {
+    "events": [
+      {
+        "ev": "ended"
+      }
+    ],
+    "input": "advance"
+  }
+]
