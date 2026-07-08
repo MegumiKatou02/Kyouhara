@@ -15,16 +15,42 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "ev", rename_all = "snake_case")]
 pub enum VmEvent {
-    Say { speaker: Option<String>, text: StringKey, opts: SayOpts },
-    Show { character: String, pose: Option<String>, pos: StagePos },
-    Hide { character: String },
-    SceneChanged { scene: String, transition: Option<String> },
-    Choices { arms: Vec<PresentedChoice> },
-    Wait { ms: u32 },
-    Sfx { asset: String },
-    Bgm { asset: Option<String> },
-    Ext { command: String, args: serde_json::Value },
-    NodeEntered { node: String },
+    Say {
+        speaker: Option<String>,
+        text: StringKey,
+        opts: SayOpts,
+    },
+    Show {
+        character: String,
+        pose: Option<String>,
+        pos: StagePos,
+    },
+    Hide {
+        character: String,
+    },
+    SceneChanged {
+        scene: String,
+        transition: Option<String>,
+    },
+    Choices {
+        arms: Vec<PresentedChoice>,
+    },
+    Wait {
+        ms: u32,
+    },
+    Sfx {
+        asset: String,
+    },
+    Bgm {
+        asset: Option<String>,
+    },
+    Ext {
+        command: String,
+        args: serde_json::Value,
+    },
+    NodeEntered {
+        node: String,
+    },
     Ended,
 }
 
@@ -56,6 +82,7 @@ pub enum VmError {
     InvalidChoice(usize),
     CallStackUnderflow,
     NotStarted,
+    BadSaveVersion(u32),
 }
 
 impl fmt::Display for VmError {
@@ -68,6 +95,9 @@ impl fmt::Display for VmError {
             VmError::InvalidChoice(i) => write!(f, "chi so lua chon {i} khong hop le"),
             VmError::CallStackUnderflow => write!(f, "return khi call stack rong"),
             VmError::NotStarted => write!(f, "vm chua start()"),
+            VmError::BadSaveVersion(v) => {
+                write!(f, "save version {v} khong ho tro (ho tro: {SAVE_VERSION})")
+            }
         }
     }
 }
@@ -80,6 +110,97 @@ struct Cursor {
     /// (chỉ số lệnh `if` ở block cha, nhánh đã vào: true=then, false=else)
     parents: Vec<(usize, bool)>,
     ip: usize,
+}
+
+/// Phiên bản định dạng save slot — tăng khi cấu trúc [`SaveSlot`] đổi
+/// (kèm migration ở tầng đọc).
+pub const SAVE_VERSION: u32 = 1;
+
+/// Save slot = snapshot + metadata + thông tin nhận diện cốt truyện.
+/// Core chỉ sinh/nạp dữ liệu; chỗ ghi (file/localStorage) là việc của shell.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SaveSlot {
+    pub save_version: u32,
+    pub story_format_version: u32,
+    pub story_hash: u64,
+    /// Node id tại điểm lưu — cho UI hiển thị và cho fallback khi cốt truyện đã đổi.
+    pub node: String,
+    /// Nhãn do shell đặt (tên slot, chương...).
+    pub label: String,
+    /// Thời điểm lưu, do shell cung cấp — core không bao giờ đọc đồng hồ.
+    #[serde(default)]
+    pub created_at: Option<String>,
+    snapshot: Snapshot,
+}
+
+/// Kết quả nạp save.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoadOutcome {
+    /// Cốt truyện y nguyên — khôi phục đúng điểm lưu, kèm event phát lại.
+    Exact(Vec<VmEvent>),
+    /// Cốt truyện đã đổi — biến được giữ, chạy lại từ đầu node cùng id.
+    /// Runtime PHẢI hiển thị cảnh báo cho người chơi.
+    NodeFallback { node: String, events: Vec<VmEvent> },
+}
+
+impl Vm {
+    /// Tạo save slot từ điểm chờ gần nhất. `None` nếu VM chưa có điểm chờ nào
+    /// (chưa `start()`).
+    pub fn save(&self, label: impl Into<String>, created_at: Option<String>) -> Option<SaveSlot> {
+        let snapshot = self.snapshots.last().cloned()?;
+        let node = self.story.nodes[snapshot.cursor.node].id.clone();
+        Some(SaveSlot {
+            save_version: SAVE_VERSION,
+            story_format_version: self.story.format_version,
+            story_hash: self.story.hash64(),
+            node,
+            label: label.into(),
+            created_at,
+            snapshot,
+        })
+    }
+
+    /// Nạp một save slot.
+    /// - Hash khớp: khôi phục đúng điểm lưu ([`LoadOutcome::Exact`]).
+    /// - Hash lệch: giữ biến, chạy lại từ đầu node cùng id
+    ///   ([`LoadOutcome::NodeFallback`]) — quy tắc tương thích của tài liệu
+    ///   thiết kế: "thử khớp theo node id và cảnh báo thay vì crash".
+    ///   Node id không còn → [`VmError::UnknownNode`].
+    ///
+    /// Lịch sử rollback bị xoá khi load (không time-travel xuyên hai timeline).
+    pub fn load(&mut self, slot: &SaveSlot) -> Result<LoadOutcome, VmError> {
+        if slot.save_version != SAVE_VERSION {
+            return Err(VmError::BadSaveVersion(slot.save_version));
+        }
+        self.snapshots.clear();
+        if slot.story_hash == self.story.hash64() {
+            let replay = self.restore(&slot.snapshot);
+            return Ok(LoadOutcome::Exact(replay));
+        }
+        // Cốt truyện đã đổi: vị trí giữa node (ip/parents/calls) không còn
+        // tin được — về đầu node cùng id, chỉ mang theo kho biến.
+        let idx = self
+            .story
+            .node_index(&slot.node)
+            .ok_or_else(|| VmError::UnknownNode(slot.node.clone()))?;
+        self.vars = slot.snapshot.vars.clone();
+        self.calls.clear();
+        self.pending.clear();
+        self.cursor = Cursor {
+            node: idx,
+            parents: Vec::new(),
+            ip: 0,
+        };
+        self.status = VmStatus::Running;
+        let mut events = vec![VmEvent::NodeEntered {
+            node: slot.node.clone(),
+        }];
+        events.extend(self.run()?);
+        Ok(LoadOutcome::NodeFallback {
+            node: slot.node.clone(),
+            events,
+        })
+    }
 }
 
 /// Ảnh chụp toàn bộ trạng thái VM tại một điểm chờ — đơn vị của rollback và save.
@@ -113,7 +234,11 @@ impl Vm {
         }
         Ok(Vm {
             story,
-            cursor: Cursor { node: 0, parents: Vec::new(), ip: 0 },
+            cursor: Cursor {
+                node: 0,
+                parents: Vec::new(),
+                ip: 0,
+            },
             calls: Vec::new(),
             vars: VarStore::default(),
             pending: Vec::new(),
@@ -138,12 +263,18 @@ impl Vm {
             .node_index(&self.story.start)
             .ok_or_else(|| VmError::UnknownNode(self.story.start.clone()))?;
         self.vars = VarStore::from(self.story.variables.clone());
-        self.cursor = Cursor { node: start_idx, parents: Vec::new(), ip: 0 };
+        self.cursor = Cursor {
+            node: start_idx,
+            parents: Vec::new(),
+            ip: 0,
+        };
         self.calls.clear();
         self.pending.clear();
         self.snapshots.clear();
         self.status = VmStatus::Running;
-        let mut ev = vec![VmEvent::NodeEntered { node: self.story.start.clone() }];
+        let mut ev = vec![VmEvent::NodeEntered {
+            node: self.story.start.clone(),
+        }];
         ev.extend(self.run()?);
         Ok(ev)
     }
@@ -162,15 +293,26 @@ impl Vm {
         if self.status != VmStatus::AwaitChoice {
             return Err(VmError::NotAwaitingChoice);
         }
-        let arm = self.pending.get(index).cloned().ok_or(VmError::InvalidChoice(index))?;
+        let arm = self
+            .pending
+            .get(index)
+            .cloned()
+            .ok_or(VmError::InvalidChoice(index))?;
         for e in &arm.effects {
             self.vars.apply(e)?;
         }
         self.pending.clear();
         match arm.target {
             Some(t) => {
-                let idx = self.story.node_index(&t).ok_or(VmError::UnknownNode(t.clone()))?;
-                self.cursor = Cursor { node: idx, parents: Vec::new(), ip: 0 };
+                let idx = self
+                    .story
+                    .node_index(&t)
+                    .ok_or(VmError::UnknownNode(t.clone()))?;
+                self.cursor = Cursor {
+                    node: idx,
+                    parents: Vec::new(),
+                    ip: 0,
+                };
                 self.status = VmStatus::Running;
                 let mut ev = vec![VmEvent::NodeEntered { node: t }];
                 ev.extend(self.run()?);
@@ -235,7 +377,11 @@ impl Vm {
         let mut blk: &[Instr] = &self.story.nodes[self.cursor.node].body;
         for (idx, branch) in &self.cursor.parents {
             match &blk[*idx] {
-                Instr::If { then_branch, else_branch, .. } => {
+                Instr::If {
+                    then_branch,
+                    else_branch,
+                    ..
+                } => {
                     blk = if *branch { then_branch } else { else_branch };
                 }
                 _ => unreachable!("con tro if khong hop le"),
@@ -280,7 +426,11 @@ impl Vm {
                         .story
                         .node_index(&target)
                         .ok_or(VmError::UnknownNode(target.clone()))?;
-                    self.cursor = Cursor { node: idx, parents: Vec::new(), ip: 0 };
+                    self.cursor = Cursor {
+                        node: idx,
+                        parents: Vec::new(),
+                        ip: 0,
+                    };
                     out.push(VmEvent::NodeEntered { node: target });
                 }
                 Instr::Call { target } => {
@@ -291,17 +441,29 @@ impl Vm {
                     let mut ret = self.cursor.clone();
                     ret.ip += 1;
                     self.calls.push(ret);
-                    self.cursor = Cursor { node: idx, parents: Vec::new(), ip: 0 };
+                    self.cursor = Cursor {
+                        node: idx,
+                        parents: Vec::new(),
+                        ip: 0,
+                    };
                     out.push(VmEvent::NodeEntered { node: target });
                 }
                 Instr::Return => {
                     let ret = self.calls.pop().ok_or(VmError::CallStackUnderflow)?;
                     self.cursor = ret;
                 }
-                Instr::Say { speaker, text, opts } => {
+                Instr::Say {
+                    speaker,
+                    text,
+                    opts,
+                } => {
                     self.cursor.ip += 1;
                     self.status = VmStatus::AwaitAdvance;
-                    out.push(VmEvent::Say { speaker, text, opts });
+                    out.push(VmEvent::Say {
+                        speaker,
+                        text,
+                        opts,
+                    });
                     self.push_snapshot(&out);
                     return Ok(out);
                 }
@@ -334,7 +496,10 @@ impl Vm {
                     let presented = visible
                         .iter()
                         .enumerate()
-                        .map(|(i, a)| PresentedChoice { index: i, text: a.text.clone() })
+                        .map(|(i, a)| PresentedChoice {
+                            index: i,
+                            text: a.text.clone(),
+                        })
                         .collect();
                     self.pending = visible;
                     self.status = VmStatus::AwaitChoice;
@@ -342,8 +507,16 @@ impl Vm {
                     self.push_snapshot(&out);
                     return Ok(out);
                 }
-                Instr::Show { character, pose, pos } => {
-                    out.push(VmEvent::Show { character, pose, pos });
+                Instr::Show {
+                    character,
+                    pose,
+                    pos,
+                } => {
+                    out.push(VmEvent::Show {
+                        character,
+                        pose,
+                        pos,
+                    });
                     self.cursor.ip += 1;
                 }
                 Instr::Hide { character } => {

@@ -13,4 +13,6 @@ pub mod vm;
 pub use ir::{ChoiceArm, Cond, CondOp, Effect, Instr, SayOpts, SetOp, StagePos, Value};
 pub use story::{Node, Story};
 pub use vars::VarStore;
-pub use vm::{PresentedChoice, Snapshot, Vm, VmError, VmEvent, VmStatus};
+pub use vm::{
+    LoadOutcome, PresentedChoice, SaveSlot, Snapshot, Vm, VmError, VmEvent, VmStatus, SAVE_VERSION,
+};

@@ -36,4 +36,17 @@ impl Story {
     pub fn node_index(&self, id: &str) -> Option<usize> {
         self.nodes.iter().position(|n| n.id == id)
     }
+
+    /// Hash nội dung cốt truyện (FNV-1a 64 trên JSON canonical).
+    /// BTreeMap + thứ tự field cố định → cùng Story luôn cho cùng hash,
+    /// trên mọi nền tảng. Save file dùng nó để phát hiện cốt truyện đã đổi.
+    pub fn hash64(&self) -> u64 {
+        let bytes = serde_json::to_vec(self).expect("story luon serialize duoc");
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in bytes {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        h
+    }
 }
