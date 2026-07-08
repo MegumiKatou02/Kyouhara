@@ -89,6 +89,7 @@ pub enum VmError {
     DivByZero { var: String },
     StepBudgetExceeded(u32),
     UnsupportedFormatVersion(u32),
+    CorruptSnapshot,
 }
 
 impl fmt::Display for VmError {
@@ -125,6 +126,9 @@ impl fmt::Display for VmError {
                     f,
                     "formatVersion {v} moi hon phien ban ho tro ({FORMAT_VERSION})"
                 )
+            }
+            VmError::CorruptSnapshot => {
+                write!(f, "save hong: con tro khong khop hinh dang cot truyen")
             }
         }
     }
@@ -233,6 +237,9 @@ impl Vm {
         }
         self.snapshots.clear();
         if slot.story_hash == self.story.hash64() {
+            if !slot.snapshot.fits(&self.story) {
+                return Err(VmError::CorruptSnapshot);
+            }
             let replay = self.restore(&slot.snapshot);
             return Ok(LoadOutcome::Exact(replay));
         }
@@ -261,6 +268,36 @@ impl Vm {
             events,
         })
     }
+}
+
+impl Snapshot {
+    /// Con trỏ (và call stack) có khớp hình dạng cốt truyện không — chốt chặn
+    /// cho save file bị sửa tay/hỏng trước khi restore, tránh panic do index.
+    fn fits(&self, story: &Story) -> bool {
+        std::iter::once(&self.cursor)
+            .chain(self.calls.iter())
+            .all(|c| cursor_fits(story, c))
+    }
+}
+
+fn cursor_fits(story: &Story, c: &Cursor) -> bool {
+    let Some(node) = story.nodes.get(c.node) else {
+        return false;
+    };
+    let mut blk: &[Instr] = &node.body;
+    for (idx, branch) in &c.parents {
+        match blk.get(*idx) {
+            Some(Instr::If {
+                then_branch,
+                else_branch,
+                ..
+            }) => {
+                blk = if *branch { then_branch } else { else_branch };
+            }
+            _ => return false,
+        }
+    }
+    c.ip <= blk.len() // ip == len hợp lệ: block vừa chạy hết
 }
 
 /// Ảnh chụp toàn bộ trạng thái VM tại một điểm chờ — đơn vị của rollback và save.
@@ -434,6 +471,8 @@ impl Vm {
     }
 
     /// Khôi phục từ một ảnh chụp (load save). Trả về sự kiện cần phát lại.
+    /// Snapshot phải sinh từ đúng cốt truyện đang chạy; dữ liệu
+    /// không tin cậy (file save trên đĩa) phải đi qua [`Vm::load`].
     pub fn restore(&mut self, snap: &Snapshot) -> Vec<VmEvent> {
         self.apply_snapshot(snap);
         self.snapshots.push(snap.clone());

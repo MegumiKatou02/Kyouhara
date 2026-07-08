@@ -32,8 +32,6 @@ Sau mục `set` thêm ba mục lệnh:
 `rand {var, min, max}` (v1) — rút một Int trong `[min, max]` (bao cả hai đầu) từ PRNG, gán vào var; không phát event, không dừng. `min > max` → `BadRandRange` (lint bắt từ lúc soạn). Map khoảng bằng nhân 128-bit, không modulo.
 `label {name`} / `goto {label}` (v1) — `label` là mốc trong node, no-op khi thực thi, chỉ hợp lệ ở cấp cao nhất của body (lint bắt label trong nhánh if). `goto` nhảy tới label cùng node từ bất kỳ đâu kể cả trong nhánh if (đường `parents` xoá sạch). Label không tồn tại → `UnknownLabel`.
 
-Và mục "Tương thích": thêm câu "v1 (rand, label/goto, set_expr) là superset thuần của v0 — migration 0→1 là no-op. VM/lint nhận mọi `format_version ≤ 1`; lớn hơn → `UnsupportedFormatVersion`."
-
 ## Kiểu dữ liệu
 
 `Value` là `Int(i64) | Bool | Str`, serialize dạng untagged (JSON tự nhiên:
@@ -109,3 +107,7 @@ mongpack v0 dùng JSON (dễ soi, dễ diff); chuyển sang định dạng nhị
 (CBOR/bincode) là việc của tối ưu sau này và chỉ đổi codec entry, không đổi
 ngữ nghĩa. Ba lệnh dự kiến của M1: `rand` (PRNG có seed), `label/goto` trong
 node, và `set` với biểu thức số học — đều đã có chỗ trong mô hình hiện tại.
+
+v1 (rand, label/goto, set_expr) là superset thuần của v0 — migration 0→1 là no-op. VM/lint nhận mọi `format_version ≤ 1`; lớn hơn → `UnsupportedFormatVersion`.
+
+Save/snapshot là dữ liệu không tin cậy (người chơi sửa tay được): phải đi qua `Vm::load` — kiểm SAVE_VERSION, hash cốt truyện và tính toàn vẹn con trỏ (`CorruptSnapshot`). `restore` là API tin cậy, chỉ nhận snapshot sinh từ đúng cốt truyện đang chạy.

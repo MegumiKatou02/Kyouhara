@@ -197,13 +197,13 @@ mod tests {
             op: CondOp::Ge,
             value: Value::Int(1),
         };
-        assert_eq!(vs.eval(&c).unwrap(), false);
+        assert!(!vs.eval(&c).unwrap());
         let c2 = Cond {
             var: "tc".into(),
             op: CondOp::Le,
             value: Value::Int(0),
         };
-        assert_eq!(vs.eval(&c2).unwrap(), true);
+        assert!(vs.eval(&c2).unwrap());
     }
 
     #[test]

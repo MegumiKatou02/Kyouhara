@@ -163,7 +163,7 @@ pub fn read_pack<R: Read>(r: &mut R) -> Result<Vec<PackEntry>, PackError> {
         return Err(PackError::BadCodec(codec[0]));
     }
     let count = r_u32(r)?;
-    let mut out = Vec::with_capacity(count as usize);
+    let mut out = Vec::new();
     for _ in 0..count {
         let name_len = r_u16(r)? as usize;
         let mut name_buf = vec![0u8; name_len];
@@ -181,7 +181,16 @@ pub fn read_pack<R: Read>(r: &mut R) -> Result<Vec<PackEntry>, PackError> {
         // nen header hong (hoac ac y) chi dan den loi Corrupt, khong the
         // lam tran bo nho hay zip-bomb.
         let mut comp = Vec::new();
-        r.by_ref().take(comp_len).read_to_end(&mut comp)?;
+        let mut limited = r.by_ref().take(comp_len);
+        let mut buf = [0u8; 8192];
+        loop {
+            match limited.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => comp.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(PackError::Io(e)),
+            }
+        }
         if comp.len() as u64 != comp_len {
             return Err(PackError::Corrupt(format!(
                 "entry '{name}': thieu du lieu nen ({} / {comp_len} byte)",
@@ -189,9 +198,18 @@ pub fn read_pack<R: Read>(r: &mut R) -> Result<Vec<PackEntry>, PackError> {
             )));
         }
         let mut data = Vec::new();
-        DeflateDecoder::new(&comp[..])
-            .take(raw_len.saturating_add(1))
-            .read_to_end(&mut data)?;
+        {
+            let mut decoder = DeflateDecoder::new(&comp[..]).take(raw_len.saturating_add(1));
+            let mut buf = [0u8; 8192];
+            loop {
+                match decoder.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => data.extend_from_slice(&buf[..n]),
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(PackError::Io(e)),
+                }
+            }
+        }
         if data.len() as u64 != raw_len {
             return Err(PackError::Corrupt(format!(
                 "entry '{name}': kich thuoc giai nen {} != khai bao {raw_len}",
