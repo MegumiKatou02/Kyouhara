@@ -169,3 +169,79 @@ fn save_restore_xac_dinh_tren_demo() {
         "restore roi chay lai cung input phai ra cung event"
     );
 }
+
+/// Story v1 tối thiểu: vòng goto 3 lượt (goto từ trong nhánh if), mỗi lượt
+/// set_expr i+=1 và rand d∈[1,100]; sau vòng rẽ cao/thấp theo d.
+/// Golden của nó GHIM thuật toán SplitMix64 + phép map khoảng: đổi PRNG là đổi
+/// ngữ nghĩa, phải lộ ra ở diff golden.
+fn v1_mini() -> Story {
+    use mong_core::{BinOp, Cond, CondOp, Expr, Instr, Node, SayOpts, Value};
+    use std::collections::BTreeMap;
+    let say = |t: &str| Instr::Say {
+        speaker: None,
+        text: t.into(),
+        opts: SayOpts::default(),
+    };
+    let mut vars = BTreeMap::new();
+    vars.insert("i".to_string(), Value::Int(0));
+    vars.insert("d".to_string(), Value::Int(0));
+    Story {
+        format_version: 1,
+        title: "v1-mini".into(),
+        default_locale: "vi".into(),
+        locales: vec![],
+        variables: vars,
+        start: "a".into(),
+        nodes: vec![Node {
+            id: "a".into(),
+            title: String::new(),
+            scene: None,
+            body: vec![
+                Instr::Label {
+                    name: "vong".into(),
+                },
+                Instr::SetExpr {
+                    var: "i".into(),
+                    expr: Expr::Bin {
+                        op: BinOp::Add,
+                        lhs: Box::new(Expr::Var("i".into())),
+                        rhs: Box::new(Expr::Lit(Value::Int(1))),
+                    },
+                },
+                Instr::Rand {
+                    var: "d".into(),
+                    min: 1,
+                    max: 100,
+                },
+                Instr::If {
+                    cond: Cond {
+                        var: "i".into(),
+                        op: CondOp::Le,
+                        value: Value::Int(2),
+                    },
+                    then_branch: vec![Instr::Goto {
+                        label: "vong".into(),
+                    }],
+                    else_branch: vec![],
+                },
+                say("a.xong"),
+                Instr::If {
+                    cond: Cond {
+                        var: "d".into(),
+                        op: CondOp::Ge,
+                        value: Value::Int(51),
+                    },
+                    then_branch: vec![say("a.cao")],
+                    else_branch: vec![say("a.thap")],
+                },
+                Instr::End,
+            ],
+        }],
+    }
+}
+
+#[test]
+fn golden_v1_rand_goto_set_expr() {
+    let log = run_script(v1_mini(), &[Advance, Advance]);
+    check_golden("v1_rand_goto_set_expr.golden.json", &log);
+}

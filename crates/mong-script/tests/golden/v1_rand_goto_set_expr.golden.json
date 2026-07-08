@@ -1,0 +1,46 @@
+[
+  {
+    "events": [
+      {
+        "ev": "node_entered",
+        "node": "a"
+      },
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "a.xong"
+      }
+    ],
+    "input": "start"
+  },
+  {
+    "events": [
+      {
+        "ev": "say",
+        "opts": {
+          "exit": false,
+          "pos": null,
+          "pose": null,
+          "sfx": null
+        },
+        "speaker": null,
+        "text": "a.thap"
+      }
+    ],
+    "input": "advance"
+  },
+  {
+    "events": [
+      {
+        "ev": "ended"
+      }
+    ],
+    "input": "advance"
+  }
+]

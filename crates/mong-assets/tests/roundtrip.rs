@@ -11,7 +11,9 @@ fn dod_m0_mongpack_round_trip() {
     let story = mong_script::load_story_json(DEMO).expect("json demo hop le");
     let issues = mong_script::validate(&story);
     assert!(
-        issues.iter().all(|i| i.severity != mong_script::Severity::Error),
+        issues
+            .iter()
+            .all(|i| i.severity != mong_script::Severity::Error),
         "demo khong duoc co loi lint: {issues:?}"
     );
 
@@ -27,7 +29,10 @@ fn dod_m0_mongpack_round_trip() {
     let back = read_pack(&mut &buf[..]).unwrap();
     assert_eq!(back.len(), 1);
     let story2: mong_core::Story = serde_json::from_slice(&back[0].data).unwrap();
-    assert_eq!(story, story2, "round-trip phai giu nguyen tung bit ngu nghia");
+    assert_eq!(
+        story, story2,
+        "round-trip phai giu nguyen tung bit ngu nghia"
+    );
 }
 
 fn advance_to_choices(vm: &mut Vm) -> Vec<mong_core::PresentedChoice> {
@@ -61,7 +66,9 @@ fn demo_chay_toi_ket_dep_khi_chao_truoc() {
     let arms = advance_to_choices(&mut vm);
     assert_eq!(arms.len(), 2);
     let e = vm.choose(0).unwrap();
-    assert!(e.iter().any(|x| matches!(x, VmEvent::SceneChanged { scene, .. } if scene == "san_thuong")));
+    assert!(e
+        .iter()
+        .any(|x| matches!(x, VmEvent::SceneChanged { scene, .. } if scene == "san_thuong")));
     vm.advance().unwrap();
     vm.advance().unwrap();
     let e = vm.advance().unwrap();

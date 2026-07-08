@@ -1,4 +1,4 @@
-# Spec tập lệnh IR — Mộng Engine (v0)
+# Spec tập lệnh IR — Mộng Engine (v1)
 
 Tài liệu này là hợp đồng của IR: mọi frontend (editor trực quan, DSL MộngScript,
 JSON dự án) biên dịch về IR này, và mọi backend (runtime desktop/web/mobile,
@@ -22,6 +22,17 @@ Quy tắc xác định (deterministic) — bất biến quan trọng nhất củ
 ở M1 dưới dạng lệnh/hàm riêng), không I/O. Hệ quả: cùng Story + cùng chuỗi
 input (`advance`/`choose`) → cùng chuỗi event, trên mọi nền tảng. Test
 `xac_dinh_sau_restore` khoá bất biến này.
+
+PRNG (v1): một SplitMix64 tự cài nằm trong state của VM và trong snapshot — rollback/save/load tái lập đúng chuỗi số đã rút. Seed mặc định là hằng số (golden test không cần cấu hình); shell đổi bằng `Vm::set_seed`, hiệu lực từ lần `start()` kế tiếp. Thuật toán PRNG là một phần của hợp đồng ngữ nghĩa, không đổi trong cùng major — golden test khoá nó.
+Ngân sách bước (v1): mỗi lượt `Running` thực thi tối đa 100 000 lệnh (`Vm::set_step_budget` để đổi); vượt → `StepBudgetExceeded`. Lưới an toàn cho vòng lặp `goto` vô hạn tác giả viết nhầm — VM báo lỗi, không bao giờ treo.
+
+Sau mục `set` thêm ba mục lệnh:
+
+`set_expr {var, expr}` (v1) — gán kết quả biểu thức vào biến; không phát event, không dừng. `expr` là AST có cấu trúc ngay trong IR (không phải chuỗi text — cú pháp text là việc của DSL M2): `lit` (Value), `var` (đọc biến), `neg`, `bin {op ∈ add|sub|mul|div|rem, lhs, rhs}`. Số học Int-only; sai kiểu → `TypeMismatch`, không ghi gì; tràn thì bão hoà; `div`/`rem` cho 0 → `DivByZero`. Biến chưa tồn tại đọc ra 0 (nhất quán add/sub của `set`). Ví dụ: `{"op":"set_expr","var":"i","expr":{"bin":{"op":"add","lhs":{"var":"i"},"rhs":{"lit":1}}}}`.
+`rand {var, min, max}` (v1) — rút một Int trong `[min, max]` (bao cả hai đầu) từ PRNG, gán vào var; không phát event, không dừng. `min > max` → `BadRandRange` (lint bắt từ lúc soạn). Map khoảng bằng nhân 128-bit, không modulo.
+`label {name`} / `goto {label}` (v1) — `label` là mốc trong node, no-op khi thực thi, chỉ hợp lệ ở cấp cao nhất của body (lint bắt label trong nhánh if). `goto` nhảy tới label cùng node từ bất kỳ đâu kể cả trong nhánh if (đường `parents` xoá sạch). Label không tồn tại → `UnknownLabel`.
+
+Và mục "Tương thích": thêm câu "v1 (rand, label/goto, set_expr) là superset thuần của v0 — migration 0→1 là no-op. VM/lint nhận mọi `format_version ≤ 1`; lớn hơn → `UnsupportedFormatVersion`."
 
 ## Kiểu dữ liệu
 

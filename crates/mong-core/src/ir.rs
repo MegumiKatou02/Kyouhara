@@ -87,6 +87,38 @@ pub struct ChoiceArm {
     pub effects: Vec<Effect>,
 }
 
+/// Phiên bản IR hiện hành. VM/loader nhận mọi `format_version <= FORMAT_VERSION`
+/// trong cùng major; v1 là superset thuần của v0 (migration 0→1 là no-op).
+pub const FORMAT_VERSION: u32 = 1;
+
+/// Toán tử hai ngôi trong biểu thức (v1). Số học Int-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+}
+
+/// Biểu thức của `set_expr` (v1) — AST có cấu trúc ngay trong IR, không phải
+/// chuỗi text: cú pháp text là việc của DSL (M2), core không parse gì.
+/// Externally-tagged có chủ đích: untagged sẽ không phân biệt được
+/// `"abc"` là Lit(Str) hay Var.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Expr {
+    Lit(Value),
+    Var(String),
+    Neg(Box<Expr>),
+    Bin {
+        op: BinOp,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
+}
+
 /// Tập lệnh IR v0. Thêm lệnh mới = thêm variant + tăng formatVersion.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -145,6 +177,21 @@ pub enum Instr {
         command: String,
         #[serde(default)]
         args: serde_json::Value,
+    },
+    Rand {
+        var: String,
+        min: i64,
+        max: i64,
+    },
+    Label {
+        name: String,
+    },
+    Goto {
+        label: String,
+    },
+    SetExpr {
+        var: String,
+        expr: Expr,
     },
     End,
 }

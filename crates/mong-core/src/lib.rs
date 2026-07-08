@@ -10,7 +10,10 @@ pub mod story;
 pub mod vars;
 pub mod vm;
 
-pub use ir::{ChoiceArm, Cond, CondOp, Effect, Instr, SayOpts, SetOp, StagePos, Value};
+pub use ir::{
+    BinOp, ChoiceArm, Cond, CondOp, Effect, Expr, Instr, SayOpts, SetOp, StagePos, Value,
+    FORMAT_VERSION,
+};
 pub use story::{Node, Story};
 pub use vars::VarStore;
 pub use vm::{

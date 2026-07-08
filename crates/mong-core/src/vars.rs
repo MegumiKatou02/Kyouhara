@@ -1,6 +1,6 @@
 //! Kho biến của cốt truyện với ngữ nghĩa xác định cho mọi phép toán.
 
-use crate::ir::{Cond, CondOp, Effect, SetOp, Value};
+use crate::ir::{BinOp, Cond, CondOp, Effect, Expr, SetOp, Value};
 use crate::vm::VmError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -17,6 +17,54 @@ impl From<BTreeMap<String, Value>> for VarStore {
 }
 
 impl VarStore {
+    /// Ghi đè trực tiếp (cho `rand`/`set_expr` — kiểu đã được kiểm ở nơi gọi).
+    pub fn set(&mut self, key: &str, value: Value) {
+        self.0.insert(key.to_string(), value);
+    }
+
+    /// Đánh giá biểu thức của `set_expr` (spec-ir v1). Số học Int-only;
+    /// biến chưa tồn tại đọc ra 0 (nhất quán add/sub); tràn thì bão hoà.
+    /// `target` là biến đích của phép gán, chỉ dùng cho thông điệp lỗi.
+    pub fn eval_expr(&self, expr: &Expr, target: &str) -> Result<Value, VmError> {
+        match expr {
+            Expr::Lit(v) => Ok(v.clone()),
+            Expr::Var(name) => Ok(self.0.get(name).cloned().unwrap_or(Value::Int(0))),
+            Expr::Neg(e) => match self.eval_expr(e, target)? {
+                Value::Int(n) => Ok(Value::Int(n.saturating_neg())),
+                _ => Err(VmError::TypeMismatch {
+                    var: target.to_string(),
+                }),
+            },
+            Expr::Bin { op, lhs, rhs } => {
+                let (a, b) = (self.eval_expr(lhs, target)?, self.eval_expr(rhs, target)?);
+                let (Value::Int(a), Value::Int(b)) = (a, b) else {
+                    return Err(VmError::TypeMismatch {
+                        var: target.to_string(),
+                    });
+                };
+                Ok(Value::Int(match op {
+                    BinOp::Add => a.saturating_add(b),
+                    BinOp::Sub => a.saturating_sub(b),
+                    BinOp::Mul => a.saturating_mul(b),
+                    BinOp::Div if b == 0 => {
+                        return Err(VmError::DivByZero {
+                            var: target.to_string(),
+                        })
+                    }
+                    // saturating: i64::MIN / -1 không panic, ra i64::MAX
+                    BinOp::Div => a.saturating_div(b),
+                    BinOp::Rem if b == 0 => {
+                        return Err(VmError::DivByZero {
+                            var: target.to_string(),
+                        })
+                    }
+                    // wrapping: i64::MIN % -1 không panic, ra 0 (đúng toán học)
+                    BinOp::Rem => a.wrapping_rem(b),
+                }))
+            }
+        }
+    }
+
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
     }
@@ -98,7 +146,11 @@ mod tests {
     use super::*;
 
     fn eff(var: &str, op: SetOp, v: Value) -> Effect {
-        Effect { var: var.into(), op, value: v }
+        Effect {
+            var: var.into(),
+            op,
+            value: v,
+        }
     }
 
     #[test]
@@ -111,7 +163,8 @@ mod tests {
     #[test]
     fn sub_va_bao_hoa() {
         let mut vs = VarStore::default();
-        vs.apply(&eff("x", SetOp::Assign, Value::Int(i64::MIN))).unwrap();
+        vs.apply(&eff("x", SetOp::Assign, Value::Int(i64::MIN)))
+            .unwrap();
         vs.apply(&eff("x", SetOp::Sub, Value::Int(1))).unwrap();
         assert_eq!(vs.get("x"), Some(&Value::Int(i64::MIN)));
     }
@@ -119,16 +172,19 @@ mod tests {
     #[test]
     fn toggle_bool() {
         let mut vs = VarStore::default();
-        vs.apply(&eff("flag", SetOp::Toggle, Value::Bool(true))).unwrap();
+        vs.apply(&eff("flag", SetOp::Toggle, Value::Bool(true)))
+            .unwrap();
         assert_eq!(vs.get("flag"), Some(&Value::Bool(true)));
-        vs.apply(&eff("flag", SetOp::Toggle, Value::Bool(true))).unwrap();
+        vs.apply(&eff("flag", SetOp::Toggle, Value::Bool(true)))
+            .unwrap();
         assert_eq!(vs.get("flag"), Some(&Value::Bool(false)));
     }
 
     #[test]
     fn sai_kieu_khong_ghi() {
         let mut vs = VarStore::default();
-        vs.apply(&eff("s", SetOp::Assign, Value::Str("a".into()))).unwrap();
+        vs.apply(&eff("s", SetOp::Assign, Value::Str("a".into())))
+            .unwrap();
         assert!(vs.apply(&eff("s", SetOp::Add, Value::Int(1))).is_err());
         assert_eq!(vs.get("s"), Some(&Value::Str("a".into())));
     }
@@ -136,16 +192,28 @@ mod tests {
     #[test]
     fn eval_mac_dinh_theo_kieu() {
         let vs = VarStore::default();
-        let c = Cond { var: "tc".into(), op: CondOp::Ge, value: Value::Int(1) };
+        let c = Cond {
+            var: "tc".into(),
+            op: CondOp::Ge,
+            value: Value::Int(1),
+        };
         assert_eq!(vs.eval(&c).unwrap(), false);
-        let c2 = Cond { var: "tc".into(), op: CondOp::Le, value: Value::Int(0) };
+        let c2 = Cond {
+            var: "tc".into(),
+            op: CondOp::Le,
+            value: Value::Int(0),
+        };
         assert_eq!(vs.eval(&c2).unwrap(), true);
     }
 
     #[test]
     fn eval_ge_tren_bool_la_loi() {
         let vs = VarStore::default();
-        let c = Cond { var: "f".into(), op: CondOp::Ge, value: Value::Bool(true) };
+        let c = Cond {
+            var: "f".into(),
+            op: CondOp::Ge,
+            value: Value::Bool(true),
+        };
         assert!(vs.eval(&c).is_err());
     }
 }

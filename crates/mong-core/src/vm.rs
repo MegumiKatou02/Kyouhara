@@ -8,6 +8,7 @@
 use crate::ir::{ChoiceArm, Instr, SayOpts, StagePos, StringKey};
 use crate::story::Story;
 use crate::vars::VarStore;
+use crate::{Value, FORMAT_VERSION};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -83,6 +84,11 @@ pub enum VmError {
     CallStackUnderflow,
     NotStarted,
     BadSaveVersion(u32),
+    UnknownLabel { node: String, label: String },
+    BadRandRange { min: i64, max: i64 },
+    DivByZero { var: String },
+    StepBudgetExceeded(u32),
+    UnsupportedFormatVersion(u32),
 }
 
 impl fmt::Display for VmError {
@@ -98,10 +104,63 @@ impl fmt::Display for VmError {
             VmError::BadSaveVersion(v) => {
                 write!(f, "save version {v} khong ho tro (ho tro: {SAVE_VERSION})")
             }
+            VmError::UnknownLabel { node, label } => {
+                write!(
+                    f,
+                    "goto toi label '{label}' khong ton tai trong node '{node}'"
+                )
+            }
+            VmError::BadRandRange { min, max } => {
+                write!(f, "rand voi khoang rong: min {min} > max {max}")
+            }
+            VmError::DivByZero { var } => write!(f, "chia cho 0 khi tinh bien '{var}'"),
+            VmError::StepBudgetExceeded(n) => {
+                write!(
+                    f,
+                    "vuot ngan sach {n} lenh mot luot chay — nghi van vong lap goto vo han"
+                )
+            }
+            VmError::UnsupportedFormatVersion(v) => {
+                write!(
+                    f,
+                    "formatVersion {v} moi hon phien ban ho tro ({FORMAT_VERSION})"
+                )
+            }
         }
     }
 }
 impl std::error::Error for VmError {}
+
+/// SplitMix64 — PRNG tự cài (~5 dòng): không kéo crate `rand` (dependency mỏng),
+/// và thuật toán bất biến vĩnh viễn trong cùng major — golden test khoá nó,
+/// replay/save tái lập được mãi mãi.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct Rng(u64);
+
+impl Rng {
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    /// Số trong [min, max] — map bằng nhân 128-bit thay vì modulo (ít bias).
+    /// range tối đa 2^64 nên tích tối đa (2^64-1)·2^64 < 2^128: không tràn.
+    fn next_in(&mut self, min: i64, max: i64) -> i64 {
+        debug_assert!(min <= max);
+        let range = (i128::from(max) - i128::from(min) + 1) as u128;
+        let hit = (u128::from(self.next_u64()) * range) >> 64;
+        (i128::from(min) + hit as i128) as i64
+    }
+}
+
+impl Default for Rng {
+    fn default() -> Self {
+        Rng(Vm::DEFAULT_SEED)
+    }
+}
 
 /// Con trỏ chương trình: node + đường vào các nhánh `if` lồng nhau + chỉ số lệnh.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -184,6 +243,7 @@ impl Vm {
             .node_index(&slot.node)
             .ok_or_else(|| VmError::UnknownNode(slot.node.clone()))?;
         self.vars = slot.snapshot.vars.clone();
+        self.rng = slot.snapshot.rng;
         self.calls.clear();
         self.pending.clear();
         self.cursor = Cursor {
@@ -213,6 +273,9 @@ pub struct Snapshot {
     status: VmStatus,
     /// Sự kiện đã phát tại điểm chờ này — phát lại khi restore để renderer vẽ đúng.
     replay: Vec<VmEvent>,
+
+    #[serde(default)]
+    rng: Rng,
 }
 
 /// Máy ảo cốt truyện.
@@ -225,10 +288,17 @@ pub struct Vm {
     status: VmStatus,
     snapshots: Vec<Snapshot>,
     snapshot_cap: usize,
+    seed: u64,
+    rng: Rng,
+    step_budget: u32,
 }
 
 impl Vm {
     pub fn new(story: Story) -> Result<Self, VmError> {
+        if story.format_version > FORMAT_VERSION {
+            return Err(VmError::UnsupportedFormatVersion(story.format_version));
+        }
+
         if story.node_index(&story.start).is_none() {
             return Err(VmError::UnknownNode(story.start.clone()));
         }
@@ -245,7 +315,26 @@ impl Vm {
             status: VmStatus::Idle,
             snapshots: Vec::new(),
             snapshot_cap: 400,
+            seed: Vm::DEFAULT_SEED,
+            rng: Rng::default(),
+            step_budget: 100_000,
         })
+    }
+
+    /// Seed mặc định — hằng số để golden test chạy không cần cấu hình.
+    pub const DEFAULT_SEED: u64 = 0x4d6f_6e67_5f76_6e31;
+
+    /// Đặt seed PRNG — hiệu lực từ lần `start()` kế tiếp. Shell muốn "ngẫu
+    /// nhiên thật" thì lấy entropy/đồng hồ ở phía shell rồi truyền vào;
+    /// core không bao giờ tự đọc (bất biến xác định).
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
+    }
+
+    /// Ngân sách lệnh cho mỗi lượt `Running` (mặc định 100 000) — lưới an toàn
+    /// chống vòng lặp `goto` vô hạn: VM báo lỗi thay vì treo.
+    pub fn set_step_budget(&mut self, budget: u32) {
+        self.step_budget = budget.max(1);
     }
 
     pub fn status(&self) -> VmStatus {
@@ -263,6 +352,7 @@ impl Vm {
             .node_index(&self.story.start)
             .ok_or_else(|| VmError::UnknownNode(self.story.start.clone()))?;
         self.vars = VarStore::from(self.story.variables.clone());
+        self.rng = Rng(self.seed);
         self.cursor = Cursor {
             node: start_idx,
             parents: Vec::new(),
@@ -356,6 +446,7 @@ impl Vm {
         self.vars = s.vars.clone();
         self.pending = s.pending.clone();
         self.status = s.status;
+        self.rng = s.rng;
     }
 
     fn push_snapshot(&mut self, replay: &[VmEvent]) {
@@ -366,6 +457,7 @@ impl Vm {
             pending: self.pending.clone(),
             status: self.status,
             replay: replay.to_vec(),
+            rng: self.rng,
         });
         if self.snapshots.len() > self.snapshot_cap {
             self.snapshots.remove(0);
@@ -393,7 +485,13 @@ impl Vm {
     /// Chạy đến điểm chờ tiếp theo, gom sự kiện phát ra.
     fn run(&mut self) -> Result<Vec<VmEvent>, VmError> {
         let mut out: Vec<VmEvent> = Vec::new();
+        let mut steps: u32 = 0;
         loop {
+            steps += 1;
+            if steps > self.step_budget {
+                return Err(VmError::StepBudgetExceeded(self.step_budget));
+            }
+
             let blk_len = self.current_block().len();
             if self.cursor.ip >= blk_len {
                 // Hết block: thoát nhánh if, hoặc return từ call, hoặc kết thúc.
@@ -412,6 +510,35 @@ impl Vm {
             }
             let instr = self.current_block()[self.cursor.ip].clone();
             match instr {
+                Instr::Rand { var, min, max } => {
+                    if min > max {
+                        return Err(VmError::BadRandRange { min, max });
+                    }
+                    let v = self.rng.next_in(min, max);
+                    self.vars.set(&var, Value::Int(v));
+                    self.cursor.ip += 1;
+                }
+                Instr::SetExpr { var, expr } => {
+                    let v = self.vars.eval_expr(&expr, &var)?;
+                    self.vars.set(&var, v);
+                    self.cursor.ip += 1;
+                }
+                Instr::Label { .. } => {
+                    self.cursor.ip += 1; // mốc nhảy — no-op khi thực thi
+                }
+                Instr::Goto { label } => {
+                    let body = &self.story.nodes[self.cursor.node].body;
+                    let pos = body
+                        .iter()
+                        .position(|i| matches!(i, Instr::Label { name } if *name == label))
+                        .ok_or_else(|| VmError::UnknownLabel {
+                            node: self.story.nodes[self.cursor.node].id.clone(),
+                            label: label.clone(),
+                        })?;
+                    // Label chỉ ở cấp cao nhất (lint ép) → nhảy ra khỏi mọi nhánh if.
+                    self.cursor.parents.clear();
+                    self.cursor.ip = pos + 1;
+                }
                 Instr::Set { effect } => {
                     self.vars.apply(&effect)?;
                     self.cursor.ip += 1;
