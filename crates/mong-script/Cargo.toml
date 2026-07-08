@@ -1,0 +1,9 @@
+[package]
+name = "mong-script"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mong-core = { path = "../mong-core" }
+serde_json = { workspace = true }

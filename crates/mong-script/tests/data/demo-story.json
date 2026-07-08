@@ -1,0 +1,77 @@
+{
+  "format_version": 0,
+  "title": "Quán cà phê lúc hoàng hôn",
+  "default_locale": "vi",
+  "locales": ["en"],
+  "variables": { "thien_cam": 0 },
+  "start": "mo_dau",
+  "nodes": [
+    {
+      "id": "mo_dau", "title": "Mở đầu", "scene": "quan_ca_phe",
+      "body": [
+        { "op": "scene", "scene": "quan_ca_phe" },
+        { "op": "bgm", "asset": "nhac_quan" },
+        { "op": "sfx", "asset": "chuong_cua" },
+        { "op": "say", "text": "mo_dau.l1" },
+        { "op": "say", "speaker": "lan", "text": "mo_dau.l2",
+          "opts": { "pose": "thuong", "pos": "left" } },
+        { "op": "choice", "arms": [
+          { "text": "mo_dau.c1", "target": "bat_chuyen",
+            "effects": [ { "var": "thien_cam", "op": "add", "value": 1 } ] },
+          { "text": "mo_dau.c2", "target": "lang_tranh" }
+        ] }
+      ]
+    },
+    {
+      "id": "bat_chuyen", "title": "Bắt chuyện", "scene": "quan_ca_phe",
+      "body": [
+        { "op": "say", "speaker": "minh", "text": "bat_chuyen.l1",
+          "opts": { "pose": "cuoi", "pos": "right" } },
+        { "op": "say", "speaker": "lan", "text": "bat_chuyen.l2",
+          "opts": { "pose": "vui", "pos": "left" } },
+        { "op": "jump", "target": "loi_moi" }
+      ]
+    },
+    {
+      "id": "lang_tranh", "title": "Lảng tránh", "scene": "quan_ca_phe",
+      "body": [
+        { "op": "say", "text": "lang_tranh.l1" },
+        { "op": "say", "speaker": "lan", "text": "lang_tranh.l2",
+          "opts": { "pose": "thuong", "pos": "left", "exit": true } },
+        { "op": "jump", "target": "loi_moi" }
+      ]
+    },
+    {
+      "id": "loi_moi", "title": "Lời mời", "scene": "quan_ca_phe",
+      "body": [
+        { "op": "say", "text": "loi_moi.l1" },
+        { "op": "say", "speaker": "lan", "text": "loi_moi.l2",
+          "opts": { "pose": "thuong", "pos": "left" } },
+        { "op": "choice", "arms": [
+          { "text": "loi_moi.c1", "target": "ket_dep",
+            "cond": { "var": "thien_cam", "op": "ge", "value": 1 } },
+          { "text": "loi_moi.c2", "target": "ket_thuong" }
+        ] }
+      ]
+    },
+    {
+      "id": "ket_dep", "title": "Kết đẹp — Hoàng hôn", "scene": "san_thuong",
+      "body": [
+        { "op": "scene", "scene": "san_thuong", "transition": "fade" },
+        { "op": "say", "text": "ket_dep.l1" },
+        { "op": "say", "speaker": "lan", "text": "ket_dep.l2",
+          "opts": { "pose": "vui", "pos": "left" } },
+        { "op": "say", "speaker": "minh", "text": "ket_dep.l3",
+          "opts": { "pose": "cuoi", "pos": "right" } },
+        { "op": "end" }
+      ]
+    },
+    {
+      "id": "ket_thuong", "title": "Kết thường — Ra về", "scene": "quan_ca_phe",
+      "body": [
+        { "op": "say", "text": "ket_thuong.l1" },
+        { "op": "end" }
+      ]
+    }
+  ]
+}
