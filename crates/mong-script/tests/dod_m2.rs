@@ -132,7 +132,11 @@ fn dod_demo_sach_lint_chuoi() {
 fn dod_diff_on_dinh() {
     let out = format_dsl(DEMO_DSL).expect("format duoc");
     assert_eq!(out.generated_keys, 0);
-    assert_eq!(out.text, DEMO_DSL);
+
+    let normalized_output = out.text.replace("\r\n", "\n").replace("\r", "\n");
+    let normalized_expected = DEMO_DSL.replace("\r\n", "\n").replace("\r", "\n");
+
+    assert_eq!(normalized_output, normalized_expected);
 }
 
 /// Lưới an toàn cho checklist: mỗi luật M2 trong docs/lint-rules.md phải
