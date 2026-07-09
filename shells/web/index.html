@@ -26,8 +26,12 @@
       const res = await fetch("../../quan.mongpack");
       if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
       start(new Uint8Array(await res.arrayBuffer()), null);
+      // CI đọc cờ này qua WebDriver. Renderer đã dựng xong (start trả về sau
+      // spawn_app) — panic sau đó sẽ không đặt cờ vì trang chết trước.
+      window.__mong_ready = true;
     } catch (e) {
       document.title = "HONG";
+      window.__mong_error = String(e);
       console.error(e);
       throw e;
     }
