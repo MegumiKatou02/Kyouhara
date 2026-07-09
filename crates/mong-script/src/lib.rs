@@ -6,6 +6,8 @@
 use mong_core::{Expr, Instr, Node, Story, FORMAT_VERSION};
 use std::collections::BTreeSet;
 pub mod dsl;
+mod lint;
+pub use lint::validate_strings;
 
 /// Mức độ của một phát hiện lint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,14 +29,14 @@ pub fn load_story_json(json: &str) -> Result<Story, serde_json::Error> {
     serde_json::from_str(json)
 }
 
-fn err(node: Option<&str>, msg: String) -> Issue {
+pub(crate) fn err(node: Option<&str>, msg: String) -> Issue {
     Issue {
         severity: Severity::Error,
         node: node.map(String::from),
         message: msg,
     }
 }
-fn warn(node: Option<&str>, msg: String) -> Issue {
+pub(crate) fn warn(node: Option<&str>, msg: String) -> Issue {
     Issue {
         severity: Severity::Warning,
         node: node.map(String::from),
@@ -266,6 +268,8 @@ pub fn validate(story: &Story) -> Vec<Issue> {
             ));
         }
     }
+
+    issues.extend(lint::lint_m2(story));
     issues
 }
 

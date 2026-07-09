@@ -142,6 +142,19 @@ fn build_catalog(path: &str, loaded: &Loaded) -> Result<Catalog, Box<dyn Error>>
     Ok(cat)
 }
 
+/// Bảng chuỗi defaultLocale: từ DSL nếu có, không thì đọc sidecar.
+fn doc_bang_chuoi(
+    path: &str,
+    loaded: &Loaded,
+    locale: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    if !loaded.default_strings.is_empty() {
+        return Ok(loaded.default_strings.clone());
+    }
+    let p = sidecar_path(path, locale);
+    Ok(serde_json::from_str(&fs::read_to_string(p)?)?)
+}
+
 fn nhac_fmt_neu_thieu_key(path: &str, generated: usize) {
     if generated > 0 {
         eprintln!(
@@ -154,7 +167,49 @@ fn nhac_fmt_neu_thieu_key(path: &str, generated: usize) {
 fn cmd_lint(path: &str) -> Result<ExitCode, Box<dyn Error>> {
     let loaded = load_input(path)?;
     nhac_fmt_neu_thieu_key(path, loaded.generated_keys);
-    let issues = mong_script::validate(&loaded.story);
+    let catalog = build_catalog(path, &loaded)?;
+
+    let mut issues = mong_script::validate(&loaded.story);
+    // Luật cần bảng chuỗi (docs/lint-rules.md L022–L024): chỉ chạy khi biết
+    // bảng defaultLocale — với JSON/mongpack không có sidecar thì bỏ qua.
+    let default_loc = &loaded.story.default_locale;
+    if catalog.has_locale(default_loc) {
+        let table = doc_bang_chuoi(path, &loaded, default_loc)?;
+        issues.extend(mong_script::validate_strings(&loaded.story, &table));
+    }
+    // L027 — locale khai báo nhưng thiếu bản dịch.
+    for loc in &loaded.story.locales {
+        let thieu = catalog.missing_in(loc);
+        if !thieu.is_empty() {
+            issues.push(mong_script::Issue {
+                severity: mong_script::Severity::Warning,
+                node: None,
+                message: format!(
+                    "locale '{loc}' thieu {} chuoi (vd: {})",
+                    thieu.len(),
+                    thieu.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                ),
+            });
+        }
+    }
+    // Sidecar defaultLocale lệch với văn bản trong .mongscript → đã cũ.
+    if !loaded.default_strings.is_empty() {
+        let p = sidecar_path(path, default_loc);
+        let tren_dia: Option<BTreeMap<String, String>> = fs::read_to_string(&p)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok());
+        if tren_dia.is_some_and(|t| t != loaded.default_strings) {
+            issues.push(mong_script::Issue {
+                severity: mong_script::Severity::Warning,
+                node: None,
+                message: format!(
+                    "{} da cu so voi file DSL — chay `mong-cli fmt {path}`",
+                    p.display()
+                ),
+            });
+        }
+    }
+
     let mut has_error = false;
     for i in &issues {
         let tag = match i.severity {
