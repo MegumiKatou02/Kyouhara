@@ -9,4 +9,10 @@ default = ["kira-backend"]
 kira-backend = ["dep:kira"]
 
 [dependencies]
-kira = { version = "0.9", optional = true }
+# default features kéo cả FLAC/MP3/Vorbis vào wasm. Chỉ giữ WAV (=
+# symphonia-format-riff + codec-pcm). Thêm codec khi có asset cần, không trước.
+kira = { version = "0.9", optional = true, default-features = false, features = [
+    "cpal",
+    "symphonia",
+    "wav",
+] }

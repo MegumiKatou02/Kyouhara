@@ -90,10 +90,34 @@ fn run_cli(args: &[String]) -> Result<ExitCode, Box<dyn Error>> {
 /// chối: gói hỏng phải lộ lúc build, không phải lúc người chơi mở.
 fn cmd_pack(dir: &str, out: &str) -> Result<ExitCode, Box<dyn Error>> {
     let loaded = mong_project::load_dir(dir, None)?;
-    let bytes = mong_project::to_pack_bytes(&loaded)?;
+    let entries = mong_project::to_pack(&loaded)?;
+    let bytes = {
+        let mut b = Vec::new();
+        mong_assets::write_pack(&mut b, &entries)?;
+        b
+    };
     fs::write(out, &bytes)?;
-    let n = 2 + loaded.strings.len() + loaded.manifest.assets.len();
-    println!("{out}: {n} entry, {} KB", bytes.len().div_ceil(1024));
+
+    // Tách "cốt truyện" khỏi "assets": ngân sách 5 MB gzip của DoD M4 tính
+    // phần đầu, phần sau tải rời.
+    let (mut logic, mut asset) = (0usize, 0usize);
+    for e in &entries {
+        match e.kind {
+            EntryKind::Image | EntryKind::Audio | EntryKind::Font => asset += e.data.len(),
+            _ => logic += e.data.len(),
+        }
+    }
+    for e in &entries {
+        println!("  {:<28} {:>9} B", e.name, e.data.len());
+    }
+    println!(
+        "{out}: {} entry | logic {} B | assets {} B | goi {} B (nen {:.0}%)",
+        entries.len(),
+        logic,
+        asset,
+        bytes.len(),
+        100.0 * bytes.len() as f64 / (logic + asset).max(1) as f64,
+    );
     Ok(ExitCode::SUCCESS)
 }
 
