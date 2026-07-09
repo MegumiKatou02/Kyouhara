@@ -1,0 +1,15 @@
+[package]
+name = "mong-web"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mong-audio = { path = "../../crates/mong-audio", default-features = false, features = ["web-backend"] }
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"

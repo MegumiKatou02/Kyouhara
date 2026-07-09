@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "shells/*"]
+members = ["crates/*", "shells/desktop"]
+
+# shells/web build riêng cho wasm32 (xem shells/web/build.ps1). Để trong
+# members thì mọi `cargo check` trên host đều kéo web-sys/WebAudio vào và gãy.
+exclude = ["shells/web"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,3 +18,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 crc32fast = "1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -7,6 +7,8 @@ license.workspace = true
 [features]
 default = ["kira-backend"]
 kira-backend = ["dep:kira"]
+# Web: WebAudio thẳng qua web-sys. Không kira, không cpal, không symphonia.
+web-backend = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
 # default features kéo cả FLAC/MP3/Vorbis vào wasm. Chỉ giữ WAV (=
@@ -15,4 +17,17 @@ kira = { version = "0.9", optional = true, default-features = false, features = 
     "cpal",
     "symphonia",
     "wav",
+] }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "AudioContext",
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioParam",
+    "GainNode",
+    "console",
 ] }

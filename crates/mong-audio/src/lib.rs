@@ -9,6 +9,11 @@ mod kira_sink;
 #[cfg(feature = "kira-backend")]
 pub use kira_sink::KiraAudio;
 
+#[cfg(feature = "web-backend")]
+mod web_sink;
+#[cfg(feature = "web-backend")]
+pub use web_sink::WebAudio;
+
 use std::fmt;
 
 /// Thời lượng crossfade khi đổi BGM. Prototype cắt cứng; engine thì không.
@@ -59,7 +64,10 @@ pub trait AudioSink {
     /// Biên độ tuyến tính 0.0..=1.0.
     fn set_bus_volume(&mut self, bus: Bus, volume: f32);
 
-    /// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Trước đó lệnh phát bị
+    /// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Gọi cái này **trong**
+    /// handler của cử chỉ đó: backend dựng thiết bị ở đây (không phải ở
+    /// `new`), rồi xả hàng đợi lệnh. Desktop gọi ngay lúc khởi tạo.
+    /// Gọi nhiều lần là no-op./// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Trước đó lệnh phát bị
     /// xếp hàng; gọi cái này để xả hàng đợi. Desktop gọi ngay lúc khởi tạo.
     fn unlock(&mut self);
 }

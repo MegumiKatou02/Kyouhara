@@ -2,3 +2,5 @@
 Cargo.lock
 .firecrawl
 *.mongpack
+shells/web/dist/
+shells/web/target

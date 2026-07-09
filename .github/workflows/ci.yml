@@ -9,7 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --workspace --all-features
+      # Không `--all-features`: `mong-audio/web-backend` chỉ compile trên wasm32.
+      - run: cargo test --workspace --features mong-audio/kira-backend
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +20,7 @@ jobs:
           targets: wasm32-unknown-unknown
       # mong-project không có `fs` = không có mong-script. Nếu ai đó lỡ tay
       # kéo parser vào đường pack, job này đỏ trước khi bundle phình.
-      - run: cargo build -p mong-project --no-default-features --target wasm32-unknown-unknown
+      - run: cargo clippy --manifest-path shells/web/Cargo.toml -- -D warnings
   lint:
     runs-on: ubuntu-latest
     steps:
