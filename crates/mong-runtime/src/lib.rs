@@ -9,6 +9,8 @@
 
 mod stage;
 mod text;
+mod draw;
+pub use draw::{DrawItem, Fit, VIRTUAL_H, VIRTUAL_W};
 
 use mong_assets::Manifest;
 use mong_core::{PresentedChoice, SayOpts, Story, Vm, VmError, VmEvent, VmStatus};
