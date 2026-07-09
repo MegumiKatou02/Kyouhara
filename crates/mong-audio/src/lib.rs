@@ -64,10 +64,10 @@ pub trait AudioSink {
     /// Biên độ tuyến tính 0.0..=1.0.
     fn set_bus_volume(&mut self, bus: Bus, volume: f32);
 
-    /// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Gọi cái này **trong**
     /// handler của cử chỉ đó: backend dựng thiết bị ở đây (không phải ở
     /// `new`), rồi xả hàng đợi lệnh. Desktop gọi ngay lúc khởi tạo.
-    /// Gọi nhiều lần là no-op./// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Trước đó lệnh phát bị
+    /// Gọi nhiều lần là no-op.
+    /// Web: audio chỉ khởi động sau cử chỉ đầu tiên. Trước đó lệnh phát bị
     /// xếp hàng; gọi cái này để xả hàng đợi. Desktop gọi ngay lúc khởi tạo.
     fn unlock(&mut self);
 }

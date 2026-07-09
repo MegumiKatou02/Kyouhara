@@ -33,7 +33,7 @@ impl Harness {
     }
 
     /// Xếp hàng *trước* unlock: kiểm chứng luôn hành vi hàng đợi của
-    /// `KiraAudio` (chỉ giữ BGM cuối, sfx phát tuần tự).
+    /// `WebAudio` (chỉ giữ BGM cuối, sfx phát tuần tự).
     pub fn bgm(&mut self, on: bool) {
         self.audio.bgm(on.then_some("nhac"));
     }
