@@ -3,3 +3,9 @@ name = "mong-runtime"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[dependencies]
+mong-core = { path = "../mong-core" }
+mong-i18n = { path = "../mong-i18n" }
+mong-assets = { path = "../mong-assets" }
+unicode-segmentation = { workspace = true }

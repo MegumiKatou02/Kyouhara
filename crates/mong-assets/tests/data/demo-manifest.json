@@ -1,0 +1,44 @@
+{
+  "format_version": 1,
+  "scenes": {
+    "quan_ca_phe": { "bg": "bg_quan", "bgm": "nhac_quan" },
+    "san_thuong": { "bg": "bg_san_thuong", "bgm": "nhac_hoang_hon" }
+  },
+  "characters": {
+    "lan": {
+      "name": "char.lan",
+      "color": "#e06c9f",
+      "layers": [
+        { "kind": "base", "default": "than", "variants": { "than": "lan_than" } },
+        { "kind": "face", "default": "thuong",
+          "variants": { "thuong": "lan_mat_thuong", "vui": "lan_mat_vui" } },
+        { "kind": "outfit", "default": "ao_dai", "variants": { "ao_dai": "lan_ao_dai" } }
+      ]
+    },
+    "minh": {
+      "name": "char.minh",
+      "color": "#6c9fe0",
+      "layers": [
+        { "kind": "base", "default": "than", "variants": { "than": "minh_than" } },
+        { "kind": "face", "default": "thuong",
+          "variants": { "thuong": "minh_mat_thuong", "cuoi": "minh_mat_cuoi" } }
+      ]
+    }
+  },
+  "assets": {
+    "bg_quan": { "path": "backgrounds/quan_ca_phe.png", "kind": "image" },
+    "bg_san_thuong": { "path": "backgrounds/san_thuong.png", "kind": "image" },
+    "lan_than": { "path": "characters/lan/base/than.png", "kind": "image" },
+    "lan_mat_thuong": { "path": "characters/lan/face/thuong.png", "kind": "image" },
+    "lan_mat_vui": { "path": "characters/lan/face/vui.png", "kind": "image" },
+    "lan_ao_dai": { "path": "characters/lan/outfit/ao_dai.png", "kind": "image" },
+    "minh_than": { "path": "characters/minh/base/than.png", "kind": "image" },
+    "minh_mat_thuong": { "path": "characters/minh/face/thuong.png", "kind": "image" },
+    "minh_mat_cuoi": { "path": "characters/minh/face/cuoi.png", "kind": "image" },
+    "nhac_quan": { "path": "audio/nhac_quan.ogg", "kind": "audio" },
+    "nhac_hoang_hon": { "path": "audio/nhac_hoang_hon.ogg", "kind": "audio" },
+    "chuong_cua": { "path": "audio/chuong_cua.ogg", "kind": "audio" },
+    "font_vi": { "path": "fonts/BeVietnamPro-Regular.ttf", "kind": "font" }
+  },
+  "fonts": { "vi": ["font_vi"], "en": ["font_vi"] }
+}

@@ -10,9 +10,11 @@
 //! Codec v0 = DEFLATE (thuần Rust, chạy được cả trên WASM). Trường `codec`
 //! trong header cho phép thêm zstd làm codec 2 sau này mà không phá định dạng.
 
+pub mod manifest;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
+pub use manifest::{Asset, AssetKind, Character, Layer, LayerKind, Manifest, Scene};
 use std::fmt;
 use std::io::{self, Read, Write};
 
