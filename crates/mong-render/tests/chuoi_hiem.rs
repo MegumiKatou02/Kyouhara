@@ -3,20 +3,19 @@
 
 use mong_render::text::{LineSpec, Shaper};
 
-fn shaper() -> (Shaper, String) {
+fn shaper() -> (Shaper, Vec<String>) {
     let mut s = Shaper::new();
     let vi = s.add_font(include_bytes!("fonts/BeVietnamPro-Regular.ttf").to_vec());
-    s.add_font(include_bytes!("fonts/NotoNaskhArabic-Regular.ttf").to_vec());
-    let family = vi.first().expect("font phai co family").clone();
-    (s, family)
+    let ar = s.add_font(include_bytes!("fonts/NotoNaskhArabic-Regular.ttf").to_vec());
+    (s, vec![vi[0].clone(), ar[0].clone()])
 }
 
-fn spec(family: &str) -> LineSpec {
+fn spec(families: &[String]) -> LineSpec {
     LineSpec {
         font_size: 32.0,
         line_height: 40.0,
         max_width: 1600.0,
-        family: family.to_string(),
+        families: families.to_vec(),
     }
 }
 
@@ -175,4 +174,46 @@ fn ngat_dong_day_chu_xuong_dong_duoi() {
     let max_y = ys.iter().cloned().fold(0.0, f32::max);
     assert!(max_y > 0.0, "phai co it nhat hai dong");
     assert!(line.height >= max_y);
+}
+
+/// Nợ số 1 của M3: chain font theo locale. Chuỗi Ả Rập phải chọn Noto, không
+/// phải BeVietnamPro (đứng trước trong chain nhưng không có glyph Ả Rập).
+#[test]
+fn chain_chon_font_phu_duoc_ky_tu() {
+    let (mut s, chain) = shaper();
+    // U+0645 U+0631 U+062D U+0628 U+0627 = "marhaba".
+    let arab = s.shape("\u{0645}\u{0631}\u{062D}\u{0628}\u{0627}", &spec(&chain));
+    let viet = s.shape("Nắng chiều", &spec(&chain));
+
+    let font_arab = arab.glyphs[0].cache_key.font_id;
+    let font_viet = viet.glyphs[0].cache_key.font_id;
+    assert_ne!(font_arab, font_viet, "hai script phai dung hai font");
+}
+
+/// Dấu tiếng Việt không được coi là "ký tự quyết định": câu tiếng Việt phải
+/// chọn font Latin đứng đầu chain, không rơi sang Noto Naskh.
+#[test]
+fn dau_tieng_viet_khong_doi_font() {
+    let (mut s, chain) = shaper();
+    let co_dau = s.shape("ế", &spec(&chain));
+    let khong_dau = s.shape("e", &spec(&chain));
+    assert_eq!(
+        co_dau.glyphs[0].cache_key.font_id,
+        khong_dau.glyphs[0].cache_key.font_id
+    );
+}
+
+/// Chain đảo thứ tự → font đổi theo, chứng minh thứ tự là dữ liệu chứ không
+/// phải may mắn của thứ tự nạp vào `FontSystem`.
+#[test]
+fn thu_tu_chain_quyet_dinh_font() {
+    let (mut s, chain) = shaper();
+    let dao: Vec<String> = chain.iter().rev().cloned().collect();
+    // "e" thuần Latin: cả hai font đều phủ, nên font đầu chain thắng.
+    let xuoi = s.shape("e", &spec(&chain));
+    let nguoc = s.shape("e", &spec(&dao));
+    assert_ne!(
+        xuoi.glyphs[0].cache_key.font_id,
+        nguoc.glyphs[0].cache_key.font_id
+    );
 }

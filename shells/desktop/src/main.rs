@@ -114,7 +114,7 @@ struct State {
     textures: HashMap<String, TextureId>,
     /// 1×1 trắng: hộp thoại là một quad tô màu bằng tint.
     white: TextureId,
-    family: String,
+    families: Vec<String>,
     /// Shape một lần mỗi chuỗi. Shape lại mỗi frame làm chữ nhảy chỗ khi
     /// xuống dòng (xem ghi chú ở mong-render::text::shape).
     shaped: HashMap<String, ShapedLine>,
@@ -185,13 +185,17 @@ impl State {
             .expect("1x1 luon nap duoc");
 
         let mut shaper = Shaper::new();
-        let family = loaded
+        // Thứ tự chain = thứ tự trong `manifest.fonts[locale]`, giữ nguyên.
+        let families: Vec<String> = loaded
             .fonts()
             .into_iter()
             .filter_map(|p| std::fs::read(p).ok())
-            .flat_map(|b| shaper.add_font(b))
-            .next()
-            .expect("du an phai khai bao it nhat mot font");
+            .filter_map(|b| shaper.add_font(b).into_iter().next())
+            .collect();
+        assert!(
+            !families.is_empty(),
+            "du an phai khai bao it nhat mot font trong manifest.fonts"
+        );
         let atlas = renderer.create_glyph_atlas();
 
         let mut audio = KiraAudio::new().expect("khong mo duoc thiet bi am thanh");
@@ -227,7 +231,7 @@ impl State {
             audio,
             textures,
             white,
-            family,
+            families,
             shaped: HashMap::new(),
             last: Instant::now(),
             missing: HashSet::new(),
@@ -255,7 +259,7 @@ impl State {
             font_size: size,
             line_height: ui::LINE_H,
             max_width: max_w,
-            family: self.family.clone(),
+            families: self.families.clone(),
         }
     }
 
