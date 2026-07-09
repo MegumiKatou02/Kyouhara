@@ -4,7 +4,7 @@
 use mong_assets::Manifest;
 use mong_core::{ChoiceArm, Instr, Node, SayOpts, StagePos, Story, FORMAT_VERSION};
 use mong_i18n::{Catalog, Table};
-use mong_runtime::{AudioCmd, Fit, Input, Runtime, Stage, VIRTUAL_H, VIRTUAL_W};
+use mong_runtime::{AudioCmd, Fit, Input, Runtime, Stage, Typewriter, VIRTUAL_H, VIRTUAL_W};
 
 const MANIFEST: &str = r#"{
   "format_version": 1,
@@ -253,4 +253,18 @@ fn nhan_vat_khong_noi_bi_lam_toi() {
     rt.input(Input::Advance).unwrap(); // sang l2, Lan van noi
     let list = rt.stage().draw_list(rt.manifest());
     assert_eq!(list[1].tint[0], 1.0);
+}
+
+#[test]
+fn toc_do_khong_le_thuoc_framerate_giua_hai_grapheme() {
+    let s = "abcdefghij";
+    let (mut a, mut b) = (Typewriter::new(s), Typewriter::new(s));
+    for _ in 0..60 {
+        a.tick(1.0 / 60.0, 6.5);
+    }
+    for _ in 0..144 {
+        b.tick(1.0 / 144.0, 6.5);
+    }
+    assert_eq!(a.visible(s), b.visible(s));
+    assert_eq!(a.visible(s), "abcdef", "1.0s x 6.5 cps = 6.5 grapheme");
 }

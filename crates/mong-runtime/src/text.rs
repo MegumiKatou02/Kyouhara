@@ -8,8 +8,10 @@ pub struct Typewriter {
     /// Vị trí byte của đầu mỗi grapheme, cộng thêm `text.len()` ở cuối.
     bounds: Vec<usize>,
     shown: usize,
-    accum: f32,
+    elapsed: f64,
 }
+
+const EPS: f64 = 1e-6;
 
 impl Typewriter {
     pub fn new(text: &str) -> Self {
@@ -18,7 +20,7 @@ impl Typewriter {
         Typewriter {
             bounds,
             shown: 0,
-            accum: 0.0,
+            elapsed: 0.0,
         }
     }
 
@@ -32,18 +34,16 @@ impl Typewriter {
         self.shown = self.total();
     }
 
-    /// `cps` = grapheme mỗi giây. Tích luỹ phần dư để tốc độ không lệ thuộc
-    /// framerate (60fps và 144fps hiện chữ cùng nhịp).
+    /// `cps` = grapheme mỗi giây. `shown` là hàm thuần của thời gian đã trôi,
+    /// nên 60fps và 144fps hiện chữ cùng nhịp — không có trạng thái nào để
+    /// sai số bám vào. `reveal_all` chặn đứng ở `done()`, `shown` không lùi.
     pub fn tick(&mut self, dt: f32, cps: f32) {
         if self.done() || cps <= 0.0 {
             return;
         }
-        self.accum += dt * cps;
-        let step = self.accum.floor();
-        if step >= 1.0 {
-            self.accum -= step;
-            self.shown = (self.shown + step as usize).min(self.total());
-        }
+        self.elapsed += f64::from(dt);
+        let n = (self.elapsed * f64::from(cps) + EPS).floor() as usize;
+        self.shown = n.min(self.total());
     }
 
     /// Cắt luôn đúng biên grapheme.
