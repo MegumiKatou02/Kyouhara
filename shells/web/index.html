@@ -1,55 +1,34 @@
 <!doctype html>
 <meta charset="utf-8" />
-<title>mong-audio harness</title>
-<body>
-  <p>Bấm "khởi động" trước — WebAudio đòi cử chỉ người dùng.</p>
-  <button id="unlock">khởi động</button>
-  <button id="sfx" disabled>chuông cửa</button>
-  <button id="bgm" disabled>nhạc on/off</button>
-  <input id="vol" type="range" min="0" max="1" step="0.05" value="1" disabled />
-  <pre id="log"></pre>
+<title>Mộng Engine</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  /* Letterbox do renderer lo (khung ảo 1920×1080); canvas cứ phủ kín. */
+  #mong { display: block; width: 100%; height: 100%; touch-action: none; }
+</style>
+<canvas id="mong"></canvas>
+<script type="module">
+  import init, { start } from "./dist/mong_web.js";
 
-  <script type="module">
-    import init, { Harness } from "./dist/mong_web.js";
+  // winit không tự chỉnh canvas. Đặt kích thước pixel thật (CSS × dpr);
+  // ResizeObserver của winit thấy và phát `Resized`.
+  const canvas = document.getElementById("mong");
+  const fit = () => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
+  };
+  fit();
+  addEventListener("resize", fit);
 
-    const log = (m) => (document.getElementById("log").textContent += m + "\n");
-    const grab = async (p) => new Uint8Array(await (await fetch(p)).arrayBuffer());
-
-    try {
-      // Bắt mọi AudioContext cpal tạo ra. kira không lộ handle này.
-          const ctxs = [];
-          for (const k of ["AudioContext", "webkitAudioContext"]) {
-            const Orig = window[k];
-            if (!Orig) continue;
-            window[k] = class extends Orig {
-              constructor(...a) { super(...a); ctxs.push(this); }
-            };
-          }
+  try {
       await init();
-      const base = "../../examples/quan-ca-phe/assets/audio";
-      const h = new Harness(
-        await grab(`${base}/chuong_cua.wav`),
-        await grab(`${base}/nhac_quan.wav`),
-      );
-      log(`WebAudio::new() OK — AudioContext: ${ctxs.length} cai (phai la 0)`);
-
-      // Xếp hàng trước gesture: đúng kịch bản thật của runtime.
-      h.bgm(true);
-      log("bgm() goi truoc unlock — phai im lang");
-
-      let on = true;
-      document.getElementById("unlock").onclick = () => {
-        h.unlock();
-        log(`unlock() — AudioContext: ${ctxs.length} cai, state = ${ctxs.map((c) => c.state)}`);
-        for (const id of ["sfx", "bgm", "vol"])
-          document.getElementById(id).disabled = false;
-      };
-      document.getElementById("sfx").onclick = () => h.sfx();
-      document.getElementById("bgm").onclick = () => h.bgm((on = !on));
-      document.getElementById("vol").oninput = (e) => h.volume(+e.target.value);
+      const res = await fetch("../../quan.mongpack");
+      if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
+      start(new Uint8Array(await res.arrayBuffer()), null);
     } catch (e) {
-      log("HONG: " + e);
+      document.title = "HONG";
+      console.error(e);
       throw e;
     }
-  </script>
-</body>
+</script>

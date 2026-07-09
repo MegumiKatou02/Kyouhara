@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "shells/desktop"]
+members = ["crates/*", "shells/desktop", "shells/common"]
 
 # shells/web build riêng cho wasm32 (xem shells/web/build.ps1). Để trong
 # members thì mọi `cargo check` trên host đều kéo web-sys/WebAudio vào và gãy.

@@ -15,3 +15,8 @@ raw-window-handle = "0.6"
 cosmic-text = "0.12"
 ttf-parser = "0.24"
 png = { version = "0.17", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# WebGL2 là sàn (mục 8). Không có feature này thì Safari/Firefox không có
+# backend nào và `request_adapter` trả None.
+wgpu = { version = "22", features = ["webgl"] }

@@ -10,6 +10,7 @@
 mod draw;
 mod stage;
 mod text;
+pub mod ui;
 pub use draw::{DrawItem, Fit, VIRTUAL_H, VIRTUAL_W};
 
 use mong_assets::Manifest;

@@ -9,9 +9,9 @@ mod kira_sink;
 #[cfg(feature = "kira-backend")]
 pub use kira_sink::KiraAudio;
 
-#[cfg(feature = "web-backend")]
+#[cfg(all(feature = "web-backend", target_arch = "wasm32"))]
 mod web_sink;
-#[cfg(feature = "web-backend")]
+#[cfg(all(feature = "web-backend", target_arch = "wasm32"))]
 pub use web_sink::WebAudio;
 
 use std::fmt;

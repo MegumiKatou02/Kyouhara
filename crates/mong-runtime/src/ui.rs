@@ -1,10 +1,10 @@
 //! Bố cục hộp thoại, toạ độ ảo (1920×1080). Thuần dữ liệu, không GPU.
 //!
-//! Ở trong shell có chủ đích: M4 (web) có thể vẽ UI bằng DOM, M6 (editor) có
-//! hộp thoại riêng. Nếu shell thứ hai copy nguyên file này thì hãy nâng nó
-//! lên `mong-runtime::ui` — không nâng trước khi có bằng chứng.
+//! Nâng từ `shells/desktop/src/ui.rs` ở M4.3 khi shell thứ hai cần đúng bố
+//! cục này (đúng điều kiện file cũ tự đặt ra). Editor M6 có hộp thoại riêng
+//! thì dựng bố cục riêng, không sửa file này.
 
-use mong_runtime::{VIRTUAL_H, VIRTUAL_W};
+use crate::{VIRTUAL_H, VIRTUAL_W};
 
 pub const BOX_X: f32 = 120.0;
 pub const BOX_W: f32 = VIRTUAL_W - BOX_X * 2.0;

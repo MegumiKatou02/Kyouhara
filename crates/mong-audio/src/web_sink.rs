@@ -8,6 +8,8 @@
 //! Bất biến: `AudioContext` **chỉ** ra đời trong [`AudioSink::unlock`], tức
 //! trong ngăn xếp của cử chỉ người dùng. Dựng nó sớm hơn thì trình duyệt cho
 //! trạng thái `suspended` và mọi thứ im lặng.
+//!
+//! Bật `web-backend` trên host là no-op: `lib.rs` cắt module này bằng `cfg`.
 
 use crate::{AudioError, AudioSink, Bus, CROSSFADE_SECS};
 use std::cell::RefCell;
@@ -15,13 +17,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{AudioBuffer, AudioBufferSourceNode, AudioContext, GainNode};
-
-#[cfg(not(target_arch = "wasm32"))]
-compile_error!(
-    "feature `web-backend` chi danh cho wasm32. Tren host, dung `kira-backend`.\n\
-     Neu ban vua chay `cargo test --all-features`: xem [package.metadata] trong Cargo.toml."
-);
+use web_sys::{
+    AudioBuffer, AudioBufferSourceNode, AudioContext, AudioScheduledSourceNode, GainNode,
+};
 
 fn canh_bao(m: &str) {
     web_sys::console::warn_1(&JsValue::from_str(m));
@@ -150,7 +148,9 @@ impl Inner {
         if let Err(e) = g.gain().linear_ramp_to_value_at_time(0.0, het) {
             canh_bao(&format!("{:?}", e));
         }
-        if let Err(e) = src.stop_with_when(het) {
+        // `AudioBufferSourceNode::stop_with_when` deprecated; lớp cha thì không.
+        let sched: &AudioScheduledSourceNode = src.as_ref();
+        if let Err(e) = sched.stop_with_when(het) {
             canh_bao(&format!("{:?}", e));
         }
     }

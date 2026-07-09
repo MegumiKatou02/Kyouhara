@@ -8,10 +8,28 @@
 
 ## Tiến độ
 - [x] M4.1 `mong-project` + `mong-cli pack`; desktop nạp được cả thư mục lẫn gói
-- [ ] M4.2 `mong-audio` trên wasm
-- [ ] M4.3 `shells/web`
+- [x] M4.2 `mong-audio` trên wasm
+- [x] M4.3 `shells/web`
 - [ ] M4.4 CI wasm + trần bundle size
 - [ ] M4.5 Kiểm chứng ba trình duyệt
+
+**RFC-002 — `shells/common` (`mong-shell`).** Vòng lặp, cửa sổ, input, và việc
+dịch `Stage`/`Line` sang `Sprite` dùng chung desktop và web. Lệch mục 3 (cây
+thư mục không có `shells/common`) nhưng lệch **bổ sung**: chiều phụ thuộc vẫn
+`shells → mong-runtime → lõi`, và `mong-runtime` vẫn không đụng wgpu. Không
+làm thì shell web là bản copy thứ hai của 300 dòng `State` — đúng vết xe
+`project.rs`.
+
+**`ui.rs` nâng lên `mong-runtime::ui`,** đúng điều kiện file cũ tự đặt ra
+("nếu shell thứ hai copy nguyên file này...").
+
+**`unlock()` dời từ `State::new` sang `State::input`.** Cử chỉ đầu tiên mở
+thiết bị. Desktop không đổi hành vi (input đầu tới ngay); web thì sống nhờ nó.
+
+**Ép `Backends::GL` trên web.** wgpu 22 gửi limit `maxInterStageShaderComponents`
+mà WebGPU spec đã bỏ → Chrome ≥ M135 từ chối `requestDevice`. WebGL2 là sàn
+(mục 8) nên không mất gì, nhưng "có WebGPU thì đẹp hơn" tạm thời là lời hứa
+suông. Nợ 8.
 
 ## Quyết định phát sinh
 
@@ -43,6 +61,22 @@ mọi định dạng backend giải mã được.
 4. Font 131 KB chưa subset. Chỉ giữ glyph có trong bảng chuỗi → cắt 80–90%.
    Nặng nhất trong đường tải tới-chữ-đầu-tiên. M6.
 
+## DoD đối chiếu
+
+| Yêu cầu | Kết quả |
+|---|---|
+| Chrome | ✅ chữ, fade, crossfade, resize, rollback, audio-on-first-click |
+| Firefox | ⬜ |
+| Safari | ⬜ **chưa kiểm chứng** — không có phần cứng macOS |
+| Bundle < 5 MB gzip | ⬜ |
+
+**Safari: M4 chưa đóng.** WebKit qua Playwright (Windows) chạy sạch, nhưng đó
+là bằng chứng hạng hai: cùng engine, khác lớp WebGL (ANGLE/D3D thay vì Metal).
+Không dùng nó để tuyên bố DoD đạt.
+
+Rủi ro số 2 (mục 14) vẫn mở. Kế hoạch: job `macos-latest` + `safaridriver` ở
+M4.4. Cho tới lúc đó M4 ở trạng thái ĐANG MỞ dù mọi thứ khác xanh.
+
 ## Ghi để khỏi điều tra lại
 
 - `os error 3` trên Windows = **path** not found; `os error 2` = **file** not
@@ -52,3 +86,11 @@ mọi định dạng backend giải mã được.
   Thứ bắt được là `-D warnings`, không phải `cargo fmt --check` hay test.
 - Tỉ lệ nén của demo (17%) là ảo: WAV sine lặp chu kỳ chính xác + PNG phẳng.
   Asset thật nén ~0%. Đừng dùng số này để bàn DEFLATE vs zstd.
+
+- `fetch` không ném khi 404. Phải kiểm `res.ok`, nếu không HTML lỗi sẽ đi
+  thẳng vào `read_pack` và báo `BadMagic` ở tận Rust.
+- `cargo check` sinh metadata stub; `cargo build` sau đó gặp stub thì rustc kêu
+  "only metadata stub found for rlib dependency core". Nguyên nhân thường là
+  rust-analyzer dùng chung `target/`. Đặt `rust-analyzer.cargo.targetDir: true`.
+- Script build phải kiểm `$LASTEXITCODE` sau mỗi lệnh ngoài, nếu không nó in
+  số byte của bản build trước và bạn tin.
