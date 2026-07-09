@@ -75,13 +75,18 @@ Các thực thể chính và trường bắt buộc (đây là hợp đồng, đ
 |---|---|---|
 | Project | `formatVersion, title, defaultLocale, locales[], variables{}, startNode` | `variables` là giá trị khởi tạo, kiểu `i64 \| bool \| string` |
 | Node | `id, title, scene, body[]` | `body` là dãy lệnh IR nguồn (mục 5), thay cho `lines + mode + next` của prototype — tổng quát hơn |
-| Character | `id, name(dịch được), color, layers[]` | `layers`: base + biểu cảm + trang phục ghép chồng; **đã chốt:** phía tác giả là PNG rời theo quy ước thư mục (`assets/characters/<id>/<layer>/<tên>.png`), `mong-cli pack` tự đóng texture atlas + metadata; mỗi layer có trường `kind` chừa đường cho mesh/skeletal sau này |
-| Scene | `id, name, bg, bgm, ambience?` | |
+| Character | `id, name(dịch được), color, layers[]` | nằm trong `manifest.json`, không trong `project.json` (RFC-001) | `layers`: base + biểu cảm + trang phục ghép chồng; **đã chốt:** phía tác giả là PNG rời theo quy ước thư mục (`assets/characters/<id>/<layer>/<tên>.png`), `mong-cli pack` tự đóng texture atlas + metadata; mỗi layer có trường `kind` chừa đường cho mesh/skeletal sau này |
+| Scene | `id, name, bg, bgm, ambience?` | như trên |
 | Asset | `id, path, kind(image/audio/font), hash` | path tương đối trong `assets/` |
 | Plugin | `id, name, enabled, lang, source` | đóng gói kèm mongpack |
 | String | mọi text hiển thị đều là `{key}` trỏ vào bảng chuỗi theo locale | **đã chốt:** key tự sinh một lần khi chuỗi ra đời, lưu bền trong dự án, không đổi khi sửa nội dung/đảo thứ tự; editor và DSL ẩn key; tác giả gắn `@key ten_rieng` khi plugin cần tham chiếu; xuất/nhập xliff/po cho translator |
 
 Quy tắc tương thích: runtime đọc được mongpack có `formatVersion` cũ hơn trong cùng major; editor mở `.mong` cũ thì tự migrate và báo. Save file của người chơi ghi kèm `formatVersion` + hash cốt truyện — nếu cốt truyện đã đổi, runtime thử khớp theo `node id` và cảnh báo thay vì crash.
+
+`manifest.json` là file thứ ba của dự án (cạnh `project.json`, `assets/`),
+mang `format_version` **riêng** (hiện = 1), độc lập với `format_version` của
+IR. Đóng vào mongpack dưới entry `Meta`. Lý do tách: mong-core không được
+biết bg/sprite là gì, nên metadata trình diễn không được nằm chung với Story.
 
 ## 5. Máy ảo cốt truyện (mong-core)
 
@@ -104,7 +109,9 @@ end                                                     # kết thúc truyện
 
 Vòng đời runtime là máy trạng thái tường minh: `Idle → Running → (AwaitAdvance | AwaitChoice | Waiting) → Running → ... → Ended`. `Running` thực thi IR cho đến khi gặp lệnh cần chờ (say chờ click, choice chờ chọn, wait chờ timer). Mỗi lần dừng chờ, core phát một `PresentationEvent` (hiện thoại X, hiện lựa chọn Y...) — runtime/renderer chỉ việc vẽ theo, còn text-mode runner thì in ra terminal.
 
-Rollback kế thừa thiết kế snapshot của prototype nhưng làm chặt: thực thi phải **xác định** (không đọc thời gian thật, không random ngoài PRNG có seed trong state), snapshot = `{pc, call_stack, vars, stage, rng_seed}` lưu vào ring buffer (mặc định 400 mục, cấu hình được). Save slot = snapshot + metadata, serialize bằng `serde` với version. Toàn bộ mục này phải đạt 100% test coverage bằng golden test: cùng mongpack + cùng chuỗi input → cùng chuỗi event, chạy trên cả native lẫn WASM.
+Rollback kế thừa thiết kế snapshot của prototype nhưng làm chặt: thực thi phải **xác định** (không đọc thời gian thật, không random ngoài PRNG có seed trong state), snapshot = `{pc, call_stack, vars, rng_seed}` lưu vào ring buffer (mặc định 400 mục, cấu hình được). Sân khấu (nền, sprite, transition) **không** nằm trong snapshot của core —
+core không có khái niệm sân khấu. `mong-runtime` giữ một ngăn xếp `Stage`
+song song, đẩy/rút 1:1 với mỗi lần VM dừng (RFC-001). Save slot = snapshot + metadata, serialize bằng `serde` với version. Toàn bộ mục này phải đạt 100% test coverage bằng golden test: cùng mongpack + cùng chuỗi input → cùng chuỗi event, chạy trên cả native lẫn WASM.
 
 ## 6. MộngScript (DSL) — thiết kế một lần, dùng hai nơi
 

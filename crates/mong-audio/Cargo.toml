@@ -3,3 +3,10 @@ name = "mong-audio"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[features]
+default = ["kira-backend"]
+kira-backend = ["dep:kira"]
+
+[dependencies]
+kira = { version = "0.9", optional = true }

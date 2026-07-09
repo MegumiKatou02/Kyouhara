@@ -9,3 +9,6 @@ mong-core = { path = "../mong-core" }
 mong-i18n = { path = "../mong-i18n" }
 mong-assets = { path = "../mong-assets" }
 unicode-segmentation = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

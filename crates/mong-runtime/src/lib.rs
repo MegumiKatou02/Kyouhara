@@ -178,6 +178,9 @@ impl Runtime {
         if self.vm.status() != VmStatus::AwaitAdvance {
             return Err(VmError::NotAwaitingAdvance);
         }
+        // Chụp trước khi áp `exit`: snapshot của VM ứng với lúc dòng thoại
+        // còn hiển thị, sân khấu phải khớp đúng thời điểm đó.
+        self.stage_history.push(self.stage.clone());
         if let Some(l) = &self.line {
             if l.exit {
                 if let Some(s) = &l.speaker {
@@ -186,7 +189,6 @@ impl Runtime {
                 }
             }
         }
-        self.stage_history.push(self.stage.clone());
         self.line = None;
         let evs = self.vm.advance()?;
         self.apply(evs);
