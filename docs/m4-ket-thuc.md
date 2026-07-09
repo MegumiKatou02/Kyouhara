@@ -61,6 +61,31 @@ mọi định dạng backend giải mã được.
 4. Font 131 KB chưa subset. Chỉ giữ glyph có trong bảng chuỗi → cắt 80–90%.
    Nặng nhất trong đường tải tới-chữ-đầu-tiên. M6.
 
+5. `WebAudio` chưa dùng bus `voice`, chưa có loop point cho nhạc có intro
+   (mục 9 tài liệu thiết kế). `AudioBufferSourceNode::set_loop_start/end` làm
+   được.
+6. `sfx` xếp hàng qua `pending_sfx` kể cả sau `unlock`: buffer chưa giải mã
+   xong thì âm phát trễ thay vì bị bỏ. Đúng cho VN; xem lại nếu M5 có sfx
+   nhịp nhanh.
+
+7. `cosmic-text` kéo `sys-locale` dù `Shaper` truyền locale cứng `"en-US"`.
+   Xem có feature nào tắt được — vài KB.
+8. Ép `Backends::GL` trên web. wgpu 22 gửi limit `maxInterStageShaderComponents`
+   mà WebGPU spec đã bỏ → Chrome ≥ M135 từ chối `requestDevice`. Nâng wgpu (24+)
+   để mở lại đường WebGPU. Không chặn DoD M4 (WebGL2 là sàn, mục 8), nhưng câu
+   "có WebGPU thì đẹp hơn" hiện là lời hứa suông.
+9. `wasm-opt` chưa vào pipeline (binaryen chưa cài). Không chặn DoD — còn 75%
+   trần. CI M4.4 nên có, để trần đo trên đúng thứ người chơi tải.
+10. `naga` (compiler WGSL) nằm trong bundle dù shader là hằng số. Cắt được nếu
+    ngân sách chật.
+
+11. Font emoji + atlas RGBA cho glyph màu (`SwashContent::Color` đang bị bỏ).
+12. Cache `shaped` không có trần — truyện 5000 dòng giữ 5000 `ShapedLine`. LRU.
+13. Rasterize glyph theo lô mỗi frame. Ưu tiên thấp.
+14. Con trỏ chờ; hit-test chuột cho lựa chọn (cần đảo ngược `letterbox`; input
+    abstraction cho mobile chưa quyết — M7).
+15. Một dòng trộn hai script vẫn dùng một font. Cần phân đoạn theo script +
+    `AttrsList` — M5.
 ## DoD đối chiếu
 
 | Yêu cầu | Kết quả |
