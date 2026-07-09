@@ -4,14 +4,13 @@
 //! Chạy: `cargo run -p mong-desktop -- <thu_muc_du_an> [locale]`
 //! Trong lúc chơi: click / Space / Enter = tiếp | 1-9 = chọn | Z = lùi.
 
-mod project;
 mod ui;
 
-use mong_assets::Manifest;
 use mong_audio::{AudioSink, KiraAudio};
 use mong_core::VmStatus;
+use mong_project::Loaded;
 use mong_render::text::{GlyphAtlas, LineSpec, ShapedLine, Shaper};
-use mong_render::{letterbox, Fit, Renderer, Sprite, TextureId};
+use mong_render::{decode_png, letterbox, Fit, Renderer, Sprite, TextureId};
 use mong_runtime::{AudioCmd, Input, Runtime, VIRTUAL_H, VIRTUAL_W};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -25,12 +24,23 @@ use winit::window::{Window, WindowId};
 fn main() {
     let mut args = std::env::args().skip(1);
     let Some(dir) = args.next() else {
-        eprintln!("cach dung: mong-desktop <thu_muc_du_an> [locale]");
+        eprintln!("cach dung: mong-desktop <thu_muc_du_an | file.mongpack> [locale]");
         std::process::exit(2);
     };
     let locale = args.next();
 
-    let loaded = match project::load(&dir, locale.as_deref()) {
+    // Nhận cả hai: thư mục (dev) và gói (thứ người chơi nhận).
+    let loaded = match std::path::Path::new(&dir).is_dir() {
+        true => mong_project::load_dir(&dir, locale.as_deref()),
+        false => match std::fs::read(&dir) {
+            Ok(b) => mong_project::load_pack(&b, locale.as_deref()),
+            Err(e) => {
+                eprintln!("loi: {dir}: {e}");
+                std::process::exit(1);
+            }
+        },
+    };
+    let loaded = match loaded {
         Ok(l) => l,
         Err(e) => {
             eprintln!("loi: {e}");
@@ -48,7 +58,7 @@ fn main() {
 }
 
 struct App {
-    loaded: Option<project::Loaded>,
+    loaded: Option<Loaded>,
     state: Option<State>,
 }
 
@@ -124,7 +134,7 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Arc<Window>, loaded: project::Loaded) -> Self {
+    async fn new(window: Arc<Window>, loaded: Loaded) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance
             .create_surface(window.clone())
@@ -167,16 +177,12 @@ impl State {
         };
         surface.configure(renderer.device(), &config);
 
-        // Ảnh: nạp hết lúc khởi động. Demo vài MB; streaming là việc của M4+.
         let mut textures = HashMap::new();
-        for (id, path) in loaded.images() {
-            match project::load_png(&path) {
-                Ok((rgba, w, h)) => match renderer.upload(&rgba, w, h) {
-                    Ok(t) => {
-                        textures.insert(id, t);
-                    }
-                    Err(e) => eprintln!("{id}: {e}"),
-                },
+        for (id, bytes) in loaded.images() {
+            match decode_png(bytes).and_then(|(rgba, w, h)| renderer.upload(&rgba, w, h)) {
+                Ok(t) => {
+                    textures.insert(id.to_string(), t);
+                }
                 Err(e) => eprintln!("{id}: {e}"),
             }
         }
@@ -189,8 +195,7 @@ impl State {
         let families: Vec<String> = loaded
             .fonts()
             .into_iter()
-            .filter_map(|p| std::fs::read(p).ok())
-            .filter_map(|b| shaper.add_font(b).into_iter().next())
+            .filter_map(|b| shaper.add_font(b.to_vec()).into_iter().next())
             .collect();
         assert!(
             !families.is_empty(),
@@ -199,21 +204,18 @@ impl State {
         let atlas = renderer.create_glyph_atlas();
 
         let mut audio = KiraAudio::new().expect("khong mo duoc thiet bi am thanh");
-        for (id, path) in loaded.sounds() {
-            match std::fs::read(&path) {
-                Ok(b) => {
-                    if let Err(e) = audio.register(&id, b) {
-                        eprintln!("{e}");
-                    }
-                }
-                Err(e) => eprintln!("{id}: {e}"),
+        for (id, bytes) in loaded.sounds() {
+            if let Err(e) = audio.register(id, bytes.to_vec()) {
+                eprintln!("{e}");
             }
         }
         audio.unlock(); // desktop không cần chờ cử chỉ người dùng
 
+        // catalog() mượn `loaded`; lấy trước rồi mới move các trường.
+        let catalog = loaded.catalog();
         let mut rt = Runtime::new(
             loaded.story,
-            loaded.catalog,
+            catalog,
             loaded.manifest,
             loaded.locale.clone(),
         )

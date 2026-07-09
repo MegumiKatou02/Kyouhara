@@ -5,7 +5,10 @@
 
 use std::fs;
 use std::io::BufWriter;
+use std::io::Write;
 use std::path::Path;
+
+const SR: u32 = 22_050;
 
 /// Sprite nhân vật dùng chung khung: các lớp chồng khít lên nhau, chân sprite
 /// nằm ở đáy ảnh (runtime neo theo chân — xem `Fit::Anchor`).
@@ -111,7 +114,51 @@ fn main() {
     face(&format!("{d}/characters/minh/face/thuong.png"), 0.0);
     face(&format!("{d}/characters/minh/face/cuoi.png"), 1.0);
 
+    wav(&format!("{d}/audio/nhac_quan.wav"), 2.0, 220.0, 0.05);
+    wav(&format!("{d}/audio/nhac_hoang_hon.wav"), 2.0, 165.0, 0.05);
+    wav(&format!("{d}/audio/chuong_cua.wav"), 0.35, 880.0, 0.25);
+
     println!("\nCon thieu:");
     println!("  {d}/fonts/BeVietnamPro-Regular.ttf  (chep tu crates/mong-render/tests/fonts/)");
-    println!("  {d}/audio/*.ogg                     (bo trong duoc, game chay cam)");
+}
+
+fn wav(path: &str, secs: f32, freq: f32, amp: f32) {
+    let n = if freq > 0.0 {
+        let cycles = (secs * freq).round().max(1.0);
+        (cycles * SR as f32 / freq).round() as u32
+    } else {
+        (secs * SR as f32) as u32
+    };
+    let data_len = n * 2;
+
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+
+    let mut f = BufWriter::new(fs::File::create(path).unwrap());
+    let mut h = |b: &[u8]| f.write_all(b).unwrap();
+    h(b"RIFF");
+    h(&(36 + data_len).to_le_bytes());
+    h(b"WAVEfmt ");
+    h(&16u32.to_le_bytes());
+    h(&[1, 0, 1, 0]); // PCM, 1 kênh
+    h(&SR.to_le_bytes());
+    h(&(SR * 2).to_le_bytes()); // byte_rate
+    h(&[2, 0, 16, 0]); // block_align, bits
+    h(b"data");
+    h(&data_len.to_le_bytes());
+
+    for i in 0..n {
+        // Fade hai đầu 5 ms: không có nó thì mỗi lần phát là một tiếng "cộp".
+        let fade = (SR as f32 * 0.005).max(1.0);
+        let env = (i as f32 / fade).min((n - i) as f32 / fade).min(1.0);
+        let s = if freq > 0.0 {
+            let t = i as f32 / SR as f32;
+            (t * freq * std::f32::consts::TAU).sin() * amp * env
+        } else {
+            0.0
+        };
+        f.write_all(&((s * i16::MAX as f32) as i16).to_le_bytes())
+            .unwrap();
+    }
 }

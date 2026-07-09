@@ -102,7 +102,7 @@ impl Catalog {
         let target = self.tables.get(locale);
         default
             .keys()
-            .filter(|k| target.map_or(true, |t| !t.contains_key(*k)))
+            .filter(|k| target.is_none_or(|t| !t.contains_key(*k)))
             .map(String::as_str)
             .collect()
     }

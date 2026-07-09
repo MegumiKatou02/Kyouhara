@@ -22,6 +22,7 @@ CACH DUNG:
   mong-cli run <file> [--locale <loc>]   choi truyen trong terminal
   mong-cli lint <file>                   kiem tra cot truyen
   mong-cli fmt <file> [--check]          chuan hoa file .mongscript
+  mong-cli pack <thu_muc> [-o <file>]    dong goi du an -> .mongpack
 
 <file> la .mongscript, JSON du an, hoac goi .mongpack (nhan qua magic bytes).
 Bang chuoi: van ban defaultLocale nam ngay trong .mongscript; cac locale khac
@@ -63,11 +64,37 @@ fn run_cli(args: &[String]) -> Result<ExitCode, Box<dyn Error>> {
             };
             cmd_fmt(path, check)
         }
+        Some("pack") => {
+            let dir = args.get(1).ok_or(USAGE)?;
+            let out = match args.get(2).map(String::as_str) {
+                Some("-o") => args.get(3).ok_or(USAGE)?.clone(),
+                Some(_) => return Err(USAGE.into()),
+                None => {
+                    let name = Path::new(dir)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("story");
+                    format!("{name}.mongpack")
+                }
+            };
+            cmd_pack(dir, &out)
+        }
         _ => {
             eprintln!("{USAGE}");
             Ok(ExitCode::FAILURE)
         }
     }
+}
+
+/// Thư mục dự án → một file .mongpack. Asset khai báo mà thiếu file thì từ
+/// chối: gói hỏng phải lộ lúc build, không phải lúc người chơi mở.
+fn cmd_pack(dir: &str, out: &str) -> Result<ExitCode, Box<dyn Error>> {
+    let loaded = mong_project::load_dir(dir, None)?;
+    let bytes = mong_project::to_pack_bytes(&loaded)?;
+    fs::write(out, &bytes)?;
+    let n = 2 + loaded.strings.len() + loaded.manifest.assets.len();
+    println!("{out}: {n} entry, {} KB", bytes.len().div_ceil(1024));
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Cốt truyện đã nạp, kèm những gì frontend DSL biết thêm.

@@ -5,6 +5,13 @@
 //! sẵn. Bố cục là việc của `mong-runtime::draw_list`.
 
 pub mod text;
+
+#[cfg(feature = "png")]
+mod image;
+
+#[cfg(feature = "png")]
+pub use image::decode_png;
+
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
 
@@ -62,6 +69,7 @@ pub enum RenderError {
     TextureTooLarge { w: u32, h: u32 },
     Surface(wgpu::SurfaceError),
     Device(String),
+    Decode(String),
 }
 
 impl std::fmt::Display for RenderError {
@@ -76,6 +84,7 @@ impl std::fmt::Display for RenderError {
             }
             RenderError::Surface(e) => write!(f, "loi surface: {e}"),
             RenderError::Device(m) => write!(f, "loi thiet bi: {m}"),
+            RenderError::Decode(m) => write!(f, "khong giai ma duoc anh: {m}"),
         }
     }
 }
@@ -329,7 +338,7 @@ impl Renderer {
             },
             size,
         );
-        let view = tex.create_view(&Default::default());
+
         Ok(self.register(&tex, (w, h)))
     }
 

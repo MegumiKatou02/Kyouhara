@@ -3,10 +3,7 @@
 //! shape lại chuỗi đã cắt thì chữ nhảy chỗ lúc xuống dòng, và với Ả Rập thì
 //! chữ đã hiện còn đổi cả hình dạng khi gõ tiếp.
 
-use cosmic_text::{
-    fontdb, Attrs, AttrsList, Buffer, BufferLine, CacheKey, Family, FontSystem, LineEnding,
-    Metrics, Shaping, Wrap,
-};
+use cosmic_text::{fontdb, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Wrap};
 
 /// Một glyph đã định vị, toạ độ ảo, gốc trái-trên.
 #[derive(Debug, Clone, Copy, PartialEq)]

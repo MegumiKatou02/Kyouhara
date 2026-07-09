@@ -9,4 +9,5 @@ mong-core = { path = "../../crates/mong-core" }
 mong-script = { path = "../../crates/mong-script" }
 mong-assets = { path = "../../crates/mong-assets" }
 mong-i18n = { path = "../../crates/mong-i18n" }
+mong-project = { path = "../../crates/mong-project" }
 serde_json = { workspace = true }

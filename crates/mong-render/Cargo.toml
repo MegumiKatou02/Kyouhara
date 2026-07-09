@@ -4,9 +4,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["png"]
+png = ["dep:png"]
+
 [dependencies]
 wgpu = "22"
 bytemuck = { version = "1", features = ["derive"] }
 raw-window-handle = "0.6"
 cosmic-text = "0.12"
 ttf-parser = "0.24"
+png = { version = "0.17", optional = true }

@@ -1,0 +1,61 @@
+# Demo "Quán cà phê lúc hoàng hôn" — cùng cốt truyện với demo-story.json,
+# viết bằng MộngScript (docs/spec-mongscript.md).
+
+@story Quán cà phê lúc hoàng hôn
+@locale vi en
+@var thien_cam = 0
+@start mo_dau
+
+@node mo_dau
+@title Mở đầu
+@scene quan_ca_phe
+
+  scene quan_ca_phe
+  bgm nhac_quan
+  sfx chuong_cua
+  * Nắng chiều đổ nghiêng qua ô cửa kính quán cà phê.  #~ mo_dau.l1
+  lan (thuong, left): Ơ… Minh? Lâu lắm rồi mới gặp cậu.  #~ mo_dau.l2
+  > Cười và chào Lan trước -> bat_chuyen { thien_cam += 1 }  #~ mo_dau.c1
+  > Giả vờ mải đọc sách -> lang_tranh  #~ mo_dau.c2
+
+@node bat_chuyen
+@title Bắt chuyện
+@scene quan_ca_phe
+
+  minh (cuoi, right): Lan đấy à? Tớ cứ tưởng nhìn nhầm.  #~ bat_chuyen.l1
+  lan (vui, left): Cậu vẫn hay ngồi đúng góc này như hồi đó nhỉ.  #~ bat_chuyen.l2
+  jump loi_moi
+
+@node lang_tranh
+@title Lảng tránh
+@scene quan_ca_phe
+
+  * Tôi cúi xuống trang sách, giả vờ không thấy.  #~ lang_tranh.l1
+  lan (thuong, left, exit): …Chắc mình nhận nhầm người.  #~ lang_tranh.l2
+  jump loi_moi
+
+@node loi_moi
+@title Lời mời
+@scene quan_ca_phe
+
+  * Trời sắp tắt nắng. Quán thưa dần.  #~ loi_moi.l1
+  lan (thuong, left): Sân thượng quán này ngắm hoàng hôn đẹp lắm. Cậu… có muốn lên xem không?  #~ loi_moi.l2
+  > Nhận lời [ thien_cam >= 1 ] -> ket_dep  #~ loi_moi.c1
+  > Từ chối khéo -> ket_thuong  #~ loi_moi.c2
+
+@node ket_dep
+@title Kết đẹp — Hoàng hôn
+@scene san_thuong
+
+  scene san_thuong fade
+  * Gió chiều mát rượi trên sân thượng.  #~ ket_dep.l1
+  lan (vui, left): Đẹp không? Tớ vẫn hay lên đây một mình.  #~ ket_dep.l2
+  minh (cuoi, right): Từ giờ chắc không phải một mình nữa rồi.  #~ ket_dep.l3
+  end
+
+@node ket_thuong
+@title Kết thường — Ra về
+@scene quan_ca_phe
+
+  * Tôi ra về khi đèn đường vừa bật. Có lẽ… để lần sau.  #~ ket_thuong.l1
+  end
