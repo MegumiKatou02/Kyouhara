@@ -7,3 +7,5 @@ license.workspace = true
 [dependencies]
 mong-core = { path = "../mong-core" }
 serde_json = { workspace = true }
+pest = "2.7"
+pest_derive = "2.7"

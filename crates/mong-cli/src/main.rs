@@ -6,10 +6,12 @@
 
 use mong_assets::{read_pack, EntryKind};
 use mong_core::{Story, Vm, VmEvent, VmStatus};
+use mong_script::dsl::load_story_dsl;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 use std::process::ExitCode;
 
 type Strings = HashMap<String, String>;
@@ -54,21 +56,49 @@ fn run_cli(args: &[String]) -> Result<ExitCode, Box<dyn Error>> {
     }
 }
 
-fn load_story(path: &str) -> Result<Story, Box<dyn Error>> {
-    parse_story(&fs::read(path)?)
+struct LoadedStory {
+    story: Story,
+    strings: Strings,
 }
 
-/// Nhận cả hai định dạng: .mongpack (nhận qua magic) hoặc JSON dự án.
+fn load_story(path: &str) -> Result<LoadedStory, Box<dyn Error>> {
+    let p = Path::new(path);
+    match p.extension().and_then(|e| e.to_str()) {
+        Some("mongscript") => {
+            let src = fs::read_to_string(path)?;
+            let out = load_story_dsl(&src)
+                .map_err(|e| format!("{}", e))?;
+            Ok(LoadedStory {
+                strings: out.strings.into_iter().collect(),
+                story: out.story,
+            })
+        }
+        _ => load_story_inner(&fs::read(path)?),
+    }
+}
+
+/// Nhận bytes → Story, dùng trong test.
 fn parse_story(bytes: &[u8]) -> Result<Story, Box<dyn Error>> {
+    Ok(load_story_inner(bytes)?.story)
+}
+
+/// Nhận bytes → Story + strings.
+fn load_story_inner(bytes: &[u8]) -> Result<LoadedStory, Box<dyn Error>> {
     if bytes.starts_with(mong_assets::MAGIC) {
         let entries = read_pack(&mut &bytes[..])?;
         let e = entries
             .into_iter()
             .find(|e| e.kind == EntryKind::StoryIr)
             .ok_or("mongpack khong co entry story.ir")?;
-        Ok(serde_json::from_slice(&e.data)?)
+        Ok(LoadedStory {
+            story: serde_json::from_slice(&e.data)?,
+            strings: Strings::new(),
+        })
     } else {
-        Ok(mong_script::load_story_json(std::str::from_utf8(bytes)?)?)
+        Ok(LoadedStory {
+            story: mong_script::load_story_json(std::str::from_utf8(bytes)?)?,
+            strings: Strings::new(),
+        })
     }
 }
 
@@ -77,7 +107,7 @@ fn load_strings(path: &str) -> Result<Strings, Box<dyn Error>> {
 }
 
 fn cmd_lint(path: &str) -> Result<ExitCode, Box<dyn Error>> {
-    let story = load_story(path)?;
+    let story = load_story(path)?.story;
     let issues = mong_script::validate(&story);
     let mut has_error = false;
     for i in &issues {
@@ -103,8 +133,11 @@ fn cmd_lint(path: &str) -> Result<ExitCode, Box<dyn Error>> {
     })
 }
 
-fn cmd_run(path: &str, strings: &Strings) -> Result<(), Box<dyn Error>> {
-    let story = load_story(path)?;
+fn cmd_run(path: &str, extra_strings: &Strings) -> Result<(), Box<dyn Error>> {
+    let loaded = load_story(path)?;
+    let story = loaded.story;
+    let mut strings = loaded.strings;
+    strings.extend(extra_strings.iter().map(|(k, v)| (k.clone(), v.clone())));
     let issues = mong_script::validate(&story);
     if issues
         .iter()
@@ -121,7 +154,7 @@ fn cmd_run(path: &str, strings: &Strings) -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     loop {
         for e in &events {
-            render(e, strings);
+            render(e, &strings);
         }
         // Core không tự hẹn giờ (spec-ir.md): text runner advance ngay sau Wait.
         let auto_wait = matches!(events.last(), Some(VmEvent::Wait { .. }));

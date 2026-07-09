@@ -2,9 +2,10 @@
 //!
 //! M0: nạp JSON (định dạng dự án `.mong`) thành [`Story`] + `validate`.
 //! M2 sẽ thêm parser DSL MộngScript; cả hai đường đều ra cùng một IR.
-
+// "M2 sẽ thêm parser DSL" → "M2: parser DSL trong `dsl` — cả hai đường ra cùng một IR."
 use mong_core::{Expr, Instr, Node, Story, FORMAT_VERSION};
 use std::collections::BTreeSet;
+pub mod dsl;
 
 /// Mức độ của một phát hiện lint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

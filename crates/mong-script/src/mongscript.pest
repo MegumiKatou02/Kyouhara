@@ -1,0 +1,139 @@
+// mongscript.pest — cú pháp bề mặt MộngScript, theo docs/spec-mongscript.md.
+//
+// Nguyên tắc: WHITESPACE ngầm chỉ gồm space/tab — KHÔNG gồm newline.
+// Newline là dấu kết thúc lệnh, xử lý tường minh qua `nl`/`eol`.
+// Indent vì thế chỉ mang tính trình bày (spec mục 2), parser khoan dung.
+
+WHITESPACE = _{ " " | "\t" }
+
+nl  = _{ "\r"? ~ "\n" }
+eof = _{ !ANY }
+eol = _{ nl | eof }
+
+// ---- token ----
+
+ident     = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+// Key bảng chuỗi: cho phép dấu chấm (dạng tự sinh `node.l1`).
+key_ident = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_" | ".")* }
+// Mã locale: cho phép gạch nối (pt-BR).
+loc_ident = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
+
+int  = @{ "-"? ~ ASCII_DIGIT+ }
+uint = @{ ASCII_DIGIT+ }
+bool_lit = @{ ("true" | "false") ~ !(ASCII_ALPHANUMERIC | "_") }
+str_lit  = @{ "\"" ~ (str_esc | !("\"" | "\\" | NEWLINE) ~ ANY)* ~ "\"" }
+str_esc  = @{ "\\" ~ ("\"" | "\\" | "n") }
+value    = { str_lit | bool_lit | int }
+
+// Văn bản thoại/dẫn truyện: đến hết dòng, dừng trước comment. `\#` là escape;
+// dẫn truyện mở đầu bằng `(` phải viết `\(` để không bị đọc nhầm thành opts.
+say_text = @{ ("\\#" | !("#" | NEWLINE) ~ ANY)+ }
+// Nhãn lựa chọn: dừng thêm trước "->", "[", "{" (escape: \# \[ \{ \>).
+arm_text = @{ (arm_esc | !("->" | "[" | "{" | "#" | NEWLINE) ~ ANY)+ }
+arm_esc  = @{ "\\" ~ ("#" | "[" | "{" | ">") }
+
+// Đuôi dòng: key bảng chuỗi (#~) và/hoặc comment tự do (#).
+key_tag   = { "#~" ~ key_ident }
+comment   = @{ "#" ~ !"~" ~ (!NEWLINE ~ ANY)* }
+tail_text = { key_tag? ~ comment? ~ eol }  // cho lệnh mang văn bản dịch được
+tail_bare = { key_tag? ~ comment? ~ eol }  // key_tag lọt qua grammar để tầng Rust
+                                           // báo lỗi "#~ chỉ gắn dòng thoại" dễ hiểu
+
+// ---- điều kiện / phép ghi / biểu thức ----
+
+cond    = { ident ~ cond_op ~ value }
+cond_op = { ">=" | "<=" | "==" | "!=" }
+
+effect    = { toggle_fx | assign_fx }
+toggle_fx = { "!" ~ ident }
+assign_fx = { ident ~ eff_op ~ value }
+eff_op    = { "+=" | "-=" | "=" }
+
+expr    = { atom ~ (op_bin ~ atom)* }
+op_bin  = _{ op_add | op_sub | op_mul | op_div | op_rem }
+op_add  = { "+" }
+op_sub  = { "-" }
+op_mul  = { "*" }
+op_div  = { "/" }
+op_rem  = { "%" }
+// Thứ tự thử: literal trước (nên `-5` là Lit(-5), `true` là Lit chứ không
+// phải biến — biến không được trùng true/false), rồi biến, ngoặc, phủ định.
+atom    = { value | var_ref | paren | neg }
+var_ref = { ident }
+paren   = { "(" ~ expr ~ ")" }
+neg     = { "-" ~ atom }
+
+// ---- lệnh ----
+
+narrate  = { "*" ~ say_opts? ~ say_text ~ tail_text }
+dialogue = { ident ~ say_opts? ~ ":" ~ say_text ~ tail_text }
+say_opts = { "(" ~ opt_item ~ ("," ~ opt_item)* ~ ")" }
+opt_sfx   = { "sfx" ~ "=" ~ ident }
+opt_exit  = { "exit" ~ !(ASCII_ALPHANUMERIC | "_") }
+opt_plain = { ident }
+opt_item  = _{ opt_sfx | opt_exit | opt_plain }
+
+// Parser khoan dung thứ tự [cond] / -> target / {effects} (spec 3.2);
+// mỗi loại tối đa một lần — kiểm ở tầng Rust để báo lỗi dễ hiểu.
+choice_arm = { ">" ~ arm_text ~ arm_part* ~ tail_text }
+arm_part   = _{ arm_cond | arm_target | arm_fx }
+arm_cond   = { "[" ~ cond ~ "]" }
+arm_target = { "->" ~ ident }
+arm_fx     = { "{" ~ effect ~ (";" ~ effect)* ~ "}" }
+
+set_stmt   = { "~" ~ (set_toggle | set_assign) ~ tail_bare }
+set_toggle = { "!" ~ ident }
+set_assign = { ident ~ set_op ~ expr }
+set_op     = { "+=" | "-=" | "=" }
+
+// `: { … }` else phải cùng dòng với `}` đóng nhánh then (formatter in `} : {`),
+// nhưng parser nhân nhượng newline trước dấu `:`.
+if_stmt   = { "?" ~ cond ~ block ~ else_part? ~ tail_bare }
+else_part = { nl* ~ ":" ~ block }
+block     = { "{" ~ body_item* ~ "}" }
+
+jump_s   = { "jump" ~ ident ~ tail_bare }
+call_s   = { "call" ~ ident ~ tail_bare }
+return_s = { "return" ~ tail_bare }
+label_s  = { "label" ~ ident ~ tail_bare }
+goto_s   = { "goto" ~ ident ~ tail_bare }
+end_s    = { "end" ~ tail_bare }
+scene_s  = { "scene" ~ ident ~ ident? ~ tail_bare }
+show_s   = { "show" ~ ident ~ ident ~ ident? ~ tail_bare }
+hide_s   = { "hide" ~ ident ~ tail_bare }
+wait_s   = { "wait" ~ uint ~ tail_bare }
+sfx_s    = { "sfx" ~ ident ~ tail_bare }
+bgm_s    = { "bgm" ~ ident? ~ tail_bare }
+rand_s   = { "rand" ~ ident ~ int ~ int ~ tail_bare }
+// ext: phần còn lại của dòng là JSON nguyên văn — vì JSON có thể chứa '#',
+// dòng ext KHÔNG nhận comment đuôi lẫn key.
+ext_s    = { "ext" ~ ident ~ ext_json? ~ eol }
+ext_json = @{ (!NEWLINE ~ ANY)+ }
+
+// Từ khoá đứng trước dialogue trong ordered choice; PEG backtrack lo phần
+// còn lại (vd `wait: …` không khớp wait_s vì thiếu số → rơi xuống dialogue).
+stmt = _{ narrate | choice_arm | set_stmt | if_stmt
+        | jump_s | call_s | return_s | label_s | goto_s | end_s
+        | scene_s | show_s | hide_s | wait_s | sfx_s | bgm_s | rand_s | ext_s
+        | dialogue }
+
+// ---- directive và cấu trúc file ----
+
+node_hdr   = { "@node" ~ ident ~ tail_bare }
+title_hdr  = { "@title" ~ say_text ~ tail_bare }
+scene_hdr  = { "@scene" ~ ident ~ tail_bare }
+story_dir  = { "@story" ~ say_text ~ tail_bare }
+locale_dir = { "@locale" ~ loc_ident+ ~ tail_bare }
+var_dir    = { "@var" ~ ident ~ "=" ~ value ~ tail_bare }
+start_dir  = { "@start" ~ ident ~ tail_bare }
+
+blank        = { nl }
+comment_line = { comment ~ eol }
+
+node      = { node_hdr ~ node_item* }
+node_item = _{ blank | comment_line | title_hdr | scene_hdr | stmt }
+body_item = _{ blank | comment_line | stmt }
+
+file      = { SOI ~ file_item* ~ EOI }
+file_item = _{ blank | comment_line | story_dir | locale_dir | var_dir
+             | start_dir | node }
