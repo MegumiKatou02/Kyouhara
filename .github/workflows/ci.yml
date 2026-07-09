@@ -9,12 +9,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-            sudo apt-get update
-            sudo apt-get install -y libasound2-dev pkg-config
-      # Không `--all-features`: `mong-audio/web-backend` chỉ compile trên wasm32.
-      - run: cargo test --workspace --features mong-audio/kira-backend
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install pkg-config
+          # macOS dùng CoreAudio, không cần ALSA
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Windows dùng WASAPI, không cần thêm gì
+          echo "No additional dependencies needed"
+
+      - name: Build and test
+        # Không `--all-features`: `mong-audio/web-backend` chỉ compile trên wasm32.
+        run: cargo test --workspace --features mong-audio/kira-backend
   wasm:
     runs-on: ubuntu-latest
     steps:
