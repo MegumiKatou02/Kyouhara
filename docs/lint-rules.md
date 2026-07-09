@@ -45,6 +45,7 @@ Phát sinh từ các quyết định đã chốt của spec-mongscript.
 | L025 | Warning | Chia/lấy dư cho literal 0 trong `set_expr` (runtime `DivByZero`) | spec-ir `set_expr` | `l025_chia_cho_khong` |
 | L026 | Warning | `return` ở node không bao giờ được `call` (runtime `CallStackUnderflow`) | spec-ir `call/return` | `l026_return_khong_ai_call` |
 | L027 | Warning | Locale khai báo trong `locales[]` thiếu bản dịch cho ≥1 key | spec-mongscript mục 7 | (mong-cli, dùng `Catalog::missing_in`) |
+| L028 | Warning | `character.name` / `scene.name` trỏ vào key không có ở bất kỳ locale nào trong `manifest.strings` | manifest v2 | `validate_bat_ten_nhan_vat_thieu_ban_dich` |
 
 L022/L023/L024/L027 cần bảng chuỗi nên nằm ở `validate_strings()`, tách khỏi
 `validate()` (chỉ nhận `Story`). `mong-cli lint` gọi cả hai.

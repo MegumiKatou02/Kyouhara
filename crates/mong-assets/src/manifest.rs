@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 /// Phiên bản schema manifest. Đổi cấu trúc = tăng số này + viết migration.
-pub const MANIFEST_VERSION: u32 = 1;
+pub const MANIFEST_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -83,6 +83,10 @@ pub struct Manifest {
     /// locale → chuỗi font fallback (asset id), thử theo thứ tự.
     #[serde(default)]
     pub fonts: BTreeMap<String, Vec<String>>,
+    /// locale → (key → văn bản). Miền key riêng của metadata; không trộn
+    /// vào bảng chuỗi nội dung ở tầng dữ liệu, chỉ hợp nhất lúc tra cứu.
+    #[serde(default)]
+    pub strings: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 #[derive(Debug)]

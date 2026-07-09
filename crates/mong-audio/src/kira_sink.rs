@@ -57,6 +57,9 @@ impl KiraAudio {
     fn play_bgm(&mut self, id: Option<&str>) {
         match id {
             // Cùng bài đang phát: không đụng vào, tránh giật nhạc khi đổi cảnh.
+            // // Lưu ý: chốt này dựa vào `current`, chỉ đặt khi `play` thành công.
+            // Asset thiếu ⇒ mỗi lệnh `bgm` lại thử lại và lại cảnh báo — đúng
+            // ý muốn: lỗi dữ liệu phải kêu mỗi lần, không im sau lần đầu.
             Some(i) if self.current.as_ref().is_some_and(|(c, _)| c == i) => {}
             Some(i) => {
                 let Some(data) = self.sounds.get(i) else {

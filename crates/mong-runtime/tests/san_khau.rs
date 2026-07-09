@@ -2,7 +2,7 @@
 //! thời điểm VM dừng (RFC-001: core không lưu stage).
 
 use mong_assets::Manifest;
-use mong_core::{ChoiceArm, Instr, Node, SayOpts, StagePos, Story, FORMAT_VERSION};
+use mong_core::{ChoiceArm, Instr, Node, SayOpts, StagePos, Story, VmStatus, FORMAT_VERSION};
 use mong_i18n::{Catalog, Table};
 use mong_runtime::{AudioCmd, Fit, Input, Runtime, Stage, Typewriter, VIRTUAL_H, VIRTUAL_W};
 
@@ -133,6 +133,33 @@ fn say_opts_dua_nhan_vat_len_san_khau() {
         ("lan", Some("vui"), StagePos::Left)
     );
     assert!(!c.dim, "nguoi dang noi khong bi lam toi");
+}
+
+/// Bấm tiếp khi màn lựa chọn đang hiện là hành vi bình thường của người chơi,
+/// không phải lỗi — engine nuốt, không bắt shell lọc.
+#[test]
+fn advance_luc_cho_chon_la_no_op() {
+    let mut rt = runtime();
+    rt.start().unwrap();
+    for _ in 0..4 {
+        rt.input(Input::Advance).unwrap();
+    }
+    assert_eq!(rt.status(), VmStatus::AwaitChoice);
+    rt.input(Input::Advance).expect("khong duoc bao loi");
+    assert_eq!(rt.status(), VmStatus::AwaitChoice, "khong nhuc nhich");
+    assert_eq!(rt.choices().len(), 1, "lua chon con nguyen");
+}
+
+#[test]
+fn advance_sau_khi_het_truyen_la_no_op() {
+    let mut rt = runtime();
+    rt.start().unwrap();
+    for _ in 0..4 {
+        rt.input(Input::Advance).unwrap();
+    }
+    rt.input(Input::Choose(0)).unwrap();
+    assert_eq!(rt.status(), VmStatus::Ended);
+    rt.input(Input::Advance).expect("khong duoc bao loi");
 }
 
 #[test]

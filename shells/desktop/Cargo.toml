@@ -1,0 +1,19 @@
+[package]
+name = "mong-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mong-core = { path = "../../crates/mong-core" }
+mong-script = { path = "../../crates/mong-script" }
+mong-assets = { path = "../../crates/mong-assets" }
+mong-i18n = { path = "../../crates/mong-i18n" }
+mong-runtime = { path = "../../crates/mong-runtime" }
+mong-render = { path = "../../crates/mong-render" }
+mong-audio = { path = "../../crates/mong-audio" }
+winit = "0.30"
+wgpu = "22"
+pollster = "0.3"
+png = "0.17"
+serde_json = { workspace = true }

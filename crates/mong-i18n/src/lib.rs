@@ -39,6 +39,16 @@ impl Catalog {
         }
     }
 
+    /// Trộn thêm một bảng vào locale đã có (hoặc tạo mới). Key trùng thì
+    /// bảng cũ thắng — bảng nội dung sinh từ nguồn là chân lý, metadata chỉ
+    /// bù vào chỗ trống.
+    pub fn merge_table(&mut self, locale: impl Into<String>, table: Table) {
+        let e = self.tables.entry(locale.into()).or_default();
+        for (k, v) in table {
+            e.entry(k).or_insert(v);
+        }
+    }
+
     pub fn default_locale(&self) -> &str {
         &self.default_locale
     }

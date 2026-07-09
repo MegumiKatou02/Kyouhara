@@ -84,9 +84,16 @@ Các thực thể chính và trường bắt buộc (đây là hợp đồng, đ
 Quy tắc tương thích: runtime đọc được mongpack có `formatVersion` cũ hơn trong cùng major; editor mở `.mong` cũ thì tự migrate và báo. Save file của người chơi ghi kèm `formatVersion` + hash cốt truyện — nếu cốt truyện đã đổi, runtime thử khớp theo `node id` và cảnh báo thay vì crash.
 
 `manifest.json` là file thứ ba của dự án (cạnh `project.json`, `assets/`),
-mang `format_version` **riêng** (hiện = 1), độc lập với `format_version` của
+mang `format_version` **riêng** (hiện = 2), độc lập với `format_version` của
 IR. Đóng vào mongpack dưới entry `Meta`. Lý do tách: mong-core không được
 biết bg/sprite là gì, nên metadata trình diễn không được nằm chung với Story.
+
+Văn bản của metadata (tên nhân vật, tên cảnh) là **key** trỏ vào
+`manifest.strings[locale]`, không phải văn bản thẳng — tên nhân vật phải dịch
+được (localization-first). Miền key này tách khỏi bảng chuỗi nội dung sinh từ
+DSL: `mong-cli fmt` quản miền nội dung và không bao giờ đụng manifest. Hai
+bảng hợp nhất lúc tra cứu qua `Catalog::merge_table`; key nội dung thắng khi
+trùng, và lint L022 bắt trùng từ lúc soạn.
 
 ## 5. Máy ảo cốt truyện (mong-core)
 

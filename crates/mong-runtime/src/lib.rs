@@ -7,9 +7,9 @@
 //! Runtime không đụng wgpu/kira — shell rút `stage()`, `line()`, `choices()`,
 //! `take_audio()` rồi tự vẽ và tự phát.
 
+mod draw;
 mod stage;
 mod text;
-mod draw;
 pub use draw::{DrawItem, Fit, VIRTUAL_H, VIRTUAL_W};
 
 use mong_assets::Manifest;
@@ -111,6 +111,20 @@ impl Runtime {
         &self.manifest
     }
 
+    /// Tên hiển thị của nhân vật, đã tra bảng chuỗi. Chưa khai báo → chính id.
+    /// `'a` chung cho `self` và `id`: kết quả mượn từ một trong hai tuỳ nhánh.
+    pub fn speaker_name<'a>(&'a self, id: &'a str) -> &'a str {
+        match self.manifest.characters.get(id) {
+            Some(c) if !c.name.is_empty() => self.catalog.text_or_key(&self.locale, &c.name),
+            _ => id,
+        }
+    }
+
+    /// Nhãn của một lựa chọn, đã tra bảng chuỗi.
+    pub fn choice_text<'a>(&'a self, arm: &'a PresentedChoice) -> &'a str {
+        self.catalog.text_or_key(&self.locale, &arm.text)
+    }
+
     /// Shell rút hàng đợi mỗi frame rồi đẩy xuống mong-audio.
     pub fn take_audio(&mut self) -> Vec<AudioCmd> {
         std::mem::take(&mut self.audio)
@@ -148,8 +162,14 @@ impl Runtime {
                 Ok(())
             }
             Input::Advance => {
+                // Bấm tiếp khi đang chờ chọn, hoặc sau khi hết truyện: bình
+                // thường, không phải lỗi. `NotAwaitingAdvance` chỉ dành cho
+                // lỗi lập trình thật (shell gọi sai lúc VM đang Running).
+                if matches!(self.vm.status(), VmStatus::AwaitChoice | VmStatus::Ended) {
+                    return Ok(());
+                }
                 if self.wait_left.is_some() {
-                    self.wait_left = None; // bấm để bỏ qua `wait`
+                    self.wait_left = None;
                 }
                 self.step_vm()
             }
