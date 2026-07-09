@@ -9,6 +9,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y libasound2-dev pkg-config
       # Không `--all-features`: `mong-audio/web-backend` chỉ compile trên wasm32.
       - run: cargo test --workspace --features mong-audio/kira-backend
   wasm:
