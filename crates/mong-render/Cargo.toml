@@ -8,3 +8,4 @@ license.workspace = true
 wgpu = "22"
 bytemuck = { version = "1", features = ["derive"] }
 raw-window-handle = "0.6"
+cosmic-text = "0.12"

@@ -4,6 +4,7 @@
 //! Crate này không biết `Stage` là gì — nó nhận danh sách [`Sprite`] đã bố cục
 //! sẵn. Bố cục là việc của `mong-runtime::draw_list`.
 
+pub mod text;
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
 
@@ -16,7 +17,17 @@ pub struct TextureId(u32);
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Fit {
     Cover,
-    Anchor { x: f32, y: f32 },
+    Anchor {
+        x: f32,
+        y: f32,
+    },
+    /// Toạ độ ảo tuyệt đối — glyph đã biết chính xác chỗ đứng của mình.
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
 }
 
 /// Một quad. Thứ tự trong slice = thứ tự vẽ (dưới lên trên).
@@ -25,6 +36,24 @@ pub struct Sprite {
     pub texture: TextureId,
     pub fit: Fit,
     pub tint: [f32; 4],
+    /// Vùng texture: `[u, v, du, dv]`. `FULL_UV` cho sprite thường.
+    pub uv: [f32; 4],
+    /// Texture là mask R8 (glyph) chứ không phải ảnh RGBA.
+    pub mask: bool,
+}
+
+pub const FULL_UV: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
+
+impl Sprite {
+    pub fn image(texture: TextureId, fit: Fit, tint: [f32; 4]) -> Self {
+        Sprite {
+            texture,
+            fit,
+            tint,
+            uv: FULL_UV,
+            mask: false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -64,6 +93,9 @@ struct Globals {
 struct Instance {
     rect: [f32; 4],
     tint: [f32; 4],
+    uv: [f32; 4],
+    mask: f32,
+    _pad: [f32; 3],
 }
 
 struct Texture {
@@ -191,7 +223,9 @@ impl Renderer {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Instance>() as u64,
                     step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4],
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x4, 1 => Float32x4, 2 => Float32x4, 3 => Float32
+                    ],
                 }],
             },
             fragment: Some(wgpu::FragmentState {
@@ -244,6 +278,14 @@ impl Renderer {
         })
     }
 
+    /// Đăng ký atlas glyph như một texture thường: draw call gộp chung,
+    /// bind group đi chung đường.
+    pub fn create_glyph_atlas(&mut self) -> text::GlyphAtlas {
+        let tex = text::create_atlas_texture(&self.device);
+        let id = self.register(&tex, (text::ATLAS_DIM, text::ATLAS_DIM));
+        text::GlyphAtlas::new(tex, id)
+    }
+
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
@@ -288,6 +330,14 @@ impl Renderer {
             size,
         );
         let view = tex.create_view(&Default::default());
+        Ok(self.register(&tex, (w, h)))
+    }
+
+    /// Cấp `TextureId` và bind group cho một texture đã tồn tại. Atlas glyph
+    /// đi qua đây để được đối xử y hệt texture thường — cùng draw call, cùng
+    /// đường bind. `upload` chỉ là `register` cộng phần tạo + nạp pixel.
+    fn register(&mut self, tex: &wgpu::Texture, size: (u32, u32)) -> TextureId {
+        let view = tex.create_view(&Default::default());
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.tex_layout,
@@ -304,14 +354,8 @@ impl Renderer {
         });
         let id = TextureId(self.next_id);
         self.next_id += 1;
-        self.textures.insert(
-            id,
-            Texture {
-                bind_group,
-                size: (w, h),
-            },
-        );
-        Ok(id)
+        self.textures.insert(id, Texture { bind_group, size });
+        id
     }
 
     /// Toạ độ ảo của một sprite. `Cover` giữ tỉ lệ, cắt phần thừa.
@@ -325,6 +369,7 @@ impl Renderer {
                 [(vw - w) * 0.5, (vh - h) * 0.5, w, h]
             }
             Fit::Anchor { x, y } => [x - tw * 0.5, y - th, tw, th],
+            Fit::Rect { x, y, w, h } => [x, y, w, h],
         }
     }
 
@@ -351,6 +396,9 @@ impl Renderer {
                     Instance {
                         rect: self.rect(s.fit, t.size),
                         tint: s.tint,
+                        uv: s.uv,
+                        mask: if s.mask { 1.0 } else { 0.0 },
+                        _pad: [0.0; 3],
                     },
                     s.texture,
                 ))

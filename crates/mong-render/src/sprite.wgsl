@@ -14,12 +14,16 @@ struct Globals {
 struct Instance {
     @location(0) rect: vec4<f32>,   // x, y, w, h (toạ độ ảo, gốc trái-trên)
     @location(1) tint: vec4<f32>,
+    @location(2) uv_rect: vec4<f32>, // u, v, du, dv trong texture
+    // > 0.5 = glyph: texture là mask R8, màu lấy từ tint.
+    @location(3) mask: f32,
 };
 
 struct VsOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) tint: vec4<f32>,
+    @location(2) @interpolate(flat) mask: f32,
 };
 
 @vertex
@@ -33,14 +37,18 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
     );
     var out: VsOut;
     out.clip = vec4<f32>(ndc, 0.0, 1.0);
-    out.uv = corner;
+    out.uv = inst.uv_rect.xy + corner * inst.uv_rect.zw;
     out.tint = inst.tint;
+    out.mask = inst.mask;
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     let c = textureSample(t_sprite, s_sprite, in.uv);
-    // Alpha premultiplied ở blend state, nên nhân tint trực tiếp là đúng.
+    if (in.mask > 0.5) {
+    // Atlas glyph là R8Unorm (độ phủ tuyến tính); màu chữ nằm ở tint.
+        return vec4<f32>(in.tint.rgb, in.tint.a * c.r);
+    }
     return c * in.tint;
 }

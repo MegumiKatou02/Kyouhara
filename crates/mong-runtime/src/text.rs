@@ -50,6 +50,12 @@ impl Typewriter {
     pub fn visible<'a>(&self, text: &'a str) -> &'a str {
         &text[..self.bounds[self.shown]]
     }
+
+    /// Số byte đã hiện. Renderer lọc glyph theo mốc này thay vì shape lại
+    /// chuỗi đã cắt — shape lại mỗi frame làm chữ nhảy chỗ khi xuống dòng.
+    pub fn visible_bytes(&self) -> usize {
+        self.bounds[self.shown]
+    }
 }
 
 #[cfg(test)]
