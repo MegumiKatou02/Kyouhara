@@ -57,6 +57,9 @@ lan (vui, left, sfx=ding, exit): …                  #~ mo_dau.l3
 ```
 
 - `*` = không speaker (người dẫn truyện) → `say {speaker: None}`.
+      Dòng `*` cũng nhận `( )` opts như dialogue (`* (sfx=ding) Văn bản…`)
+      vì IR cho phép `say {speaker: None, opts}` — vd. sfx đệm cho một
+      nhịp dẫn truyện.
 - `tên:` = speaker là id nhân vật. Ngoặc tròn tuỳ chọn chứa opts:
   hai vị trí đầu là `pose`, `pos` (positional); sau đó là mục có tên
   `sfx=<id>` và cờ `exit`. Thứ tự mục có tên: formatter luôn in
@@ -105,9 +108,12 @@ Sigil `~`:
 
 Quy tắc chọn lệnh IR (xác định, để round-trip ổn định): vế phải là **literal
 đơn** → `set` với op tương ứng; có bất kỳ toán tử/biến nào → `set_expr`
-(`+=`/`-=` khai triển thành `var = var + (expr)`). Chiều ngược (IR → DSL):
-`set` in đúng dạng ngắn; `set_expr` có dạng `var = var + rhs` in thành
-`var += rhs` khi khớp mẫu, còn lại in nguyên biểu thức.
+(`+=`/`-=` khai triển thành `var = var + (expr)`). Chiều ngược (IR → DSL): 
+`set` in đúng dạng ngắn; `set_expr` dạng
+`var = var ± rhs` in thành `var ±= rhs` khi khớp mẫu **trừ khi** rhs là
+literal Int (khi đó phải in dạng dài `var = var ± n` — dạng ngắn sẽ bị
+parse ngược thành `set {add/sub}`); còn lại in nguyên biểu thức.
+`Neg` luôn in `-( … )` (nghịch đảo quy ước "`-5` là literal âm", mục 4).
 
 ### 3.4 Rẽ nhánh → `if`
 
@@ -172,6 +178,10 @@ formatter in lại JSON chuẩn hoá (serde_json, key theo thứ tự khai báo 
 
 - `#` mở comment đến hết dòng (trừ `#~` là key, mục 6). Trong *văn bản*
   thoại/label, `#` phải viết `\#`; formatter tự escape khi in.
+- Văn bản **dẫn truyện** mở đầu bằng `(` phải viết `\(` để không bị đọc
+      nhầm thành opts của dòng `*` (vd. kịch bản kiểu "(sigh) He left.");
+      formatter tự escape. Chỉ có nghĩa ở đầu văn bản; thoại có speaker
+      không cần (opts đứng trước dấu `:`).
 - Comment tự do được **bảo toàn qua round-trip**: parser gắn comment vào
   lệnh cùng dòng (trailing) hoặc lệnh ngay sau (leading); formatter in lại
   đúng vị trí. Đây là điều kiện để tác giả dám format toàn dự án.
