@@ -66,9 +66,9 @@ mọi định dạng backend giải mã được.
 | Yêu cầu | Kết quả |
 |---|---|
 | Chrome | ✅ chữ, fade, crossfade, resize, rollback, audio-on-first-click |
-| Firefox | ⬜ |
+| Firefox | ✅ |
 | Safari | ⬜ **chưa kiểm chứng** — không có phần cứng macOS |
-| Bundle < 5 MB gzip | ⬜ |
+| Bundle < 5 MB gzip | ✅ |
 
 **Safari: M4 chưa đóng.** WebKit qua Playwright (Windows) chạy sạch, nhưng đó
 là bằng chứng hạng hai: cùng engine, khác lớp WebGL (ANGLE/D3D thay vì Metal).
