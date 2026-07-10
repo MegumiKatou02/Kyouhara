@@ -56,7 +56,6 @@ fn runtime(story: Story, texts: &[(&str, &str)], plugins: &[(&str, &str)]) -> Ru
 
 #[test]
 fn filter_chen_bien_vao_thoai() {
-    let src = r#"fn filter_text(m) { m.text.replace("{ten}", get_var("ten")); m.text }"#;
     // rhai: replace trả String mới hay sửa tại chỗ tuỳ version — viết an toàn:
     let src = r#"fn filter_text(m) { let t = m.text; t.replace("{ten}", get_var("ten")); t }"#;
     let _ = src;
@@ -120,7 +119,7 @@ fn set_var_cua_plugin_song_sot_qua_rollback() {
 fn goto_trong_on_node_enter_khong_de_lai_event_oi() {
     // Node "a" có Say ngay sau NodeEntered; plugin goto("b") lúc vào "a".
     // Nếu phần đuôi batch cũ vẫn được áp, line sẽ là "x" (của a) thay vì "y".
-    let mut rt = runtime(
+    let rt = runtime(
         story(
             vec![say("a.l1"), Instr::End],
             vec![Node {
@@ -142,7 +141,7 @@ fn goto_trong_on_node_enter_khong_de_lai_event_oi() {
 #[test]
 fn goto_day_chuyen_bi_ngan_sach_chan() {
     // on_node_enter của "b" goto chính nó — không có ngân sách thì treo/tràn stack.
-    let mut rt = runtime(
+    let rt = runtime(
         story(
             vec![say("a.l1"), Instr::End],
             vec![Node {
