@@ -18,6 +18,8 @@ pub const ENTRY_MANIFEST: &str = "manifest.json";
 pub const ENTRY_STORY: &str = "story.ir";
 pub const PREFIX_STRINGS: &str = "strings/";
 pub const PREFIX_ASSETS: &str = "assets/";
+pub const PREFIX_PLUGINS: &str = "plugins/";
+pub const SUFFIX_PLUGIN: &str = ".rhai";
 
 #[derive(Debug)]
 pub enum ProjectError {
@@ -80,6 +82,10 @@ pub struct Loaded {
     pub locale: String,
     /// asset id → bytes thô (PNG/OGG/TTF chưa giải mã).
     pub assets: BTreeMap<String, Vec<u8>>,
+
+    /// plugin id → mã nguồn rhai. Thứ tự BTreeMap = thứ tự nạp và thứ tự
+    /// chạy hook — một phần của tính xác định (spec-plugin.md).
+    pub plugins: BTreeMap<String, String>,
 }
 
 impl Loaded {
@@ -163,6 +169,7 @@ pub fn load_pack(bytes: &[u8], locale: Option<&str>) -> Result<Loaded, ProjectEr
     let mut manifest: Option<Manifest> = None;
     let mut strings = BTreeMap::new();
     let mut assets = BTreeMap::new();
+    let mut plugins = BTreeMap::new();
 
     for e in read_pack(&mut &bytes[..])? {
         match e.kind {
@@ -196,8 +203,16 @@ pub fn load_pack(bytes: &[u8], locale: Option<&str>) -> Result<Loaded, ProjectEr
                     .to_string();
                 assets.insert(id, e.data);
             }
-            // Entry lạ: bỏ qua. Xem mongpack-entries.md §5.2 — read_pack chưa cho phép kind lạ.
-            EntryKind::Meta | EntryKind::Plugin => {}
+            EntryKind::Plugin => {
+                let id = e.name.strip_prefix(PREFIX_PLUGINS).unwrap_or(&e.name);
+                let id = id.strip_suffix(SUFFIX_PLUGIN).unwrap_or(id).to_string();
+                let src = String::from_utf8(e.data).map_err(|x| {
+                    ProjectError::Json(format!("plugin '{id}': khong phai UTF-8: {x}"))
+                })?;
+                plugins.insert(id, src);
+            }
+            // Meta tên lạ hoặc kind lạ: bỏ qua (mongpack-entries §3, §5.2).
+            EntryKind::Meta | EntryKind::Unknown(_) => {}
         }
     }
 
@@ -210,6 +225,7 @@ pub fn load_pack(bytes: &[u8], locale: Option<&str>) -> Result<Loaded, ProjectEr
         manifest,
         locale,
         assets,
+        plugins,
     })
 }
 
@@ -249,6 +265,13 @@ pub fn to_pack(l: &Loaded) -> Result<Vec<PackEntry>, ProjectError> {
             name: format!("{PREFIX_ASSETS}{id}"),
             kind,
             data: l.assets[id].clone(),
+        });
+    }
+    for (id, src) in &l.plugins {
+        out.push(PackEntry {
+            name: format!("{PREFIX_PLUGINS}{id}{SUFFIX_PLUGIN}"),
+            kind: EntryKind::Plugin,
+            data: src.clone().into_bytes(),
         });
     }
     Ok(out)

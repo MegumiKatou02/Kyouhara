@@ -65,7 +65,18 @@ fn loaded() -> Loaded {
         manifest: Manifest::parse(MANIFEST).unwrap(),
         locale: "vi".into(),
         assets,
+        plugins: BTreeMap::new(),
     }
+}
+
+/// Plugin đi qua gói nguyên vẹn, id tách đúng từ tên entry.
+#[test]
+fn plugin_round_trip_qua_goi() {
+    let mut l = loaded();
+    l.plugins
+        .insert("rung".into(), "fn on_game_start() {}".into());
+    let back = load_pack(&to_pack_bytes(&l).unwrap(), Some("vi")).unwrap();
+    assert_eq!(l, back);
 }
 
 #[test]

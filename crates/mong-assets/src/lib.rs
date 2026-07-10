@@ -32,6 +32,11 @@ pub enum EntryKind {
     Audio,
     Plugin,
     Font,
+    /// Kind chưa biết — gói được tạo bởi engine mới hơn. Đọc được (khung
+    /// entry tự mô tả kích thước), tầng trên bỏ qua (mongpack-entries §5.2).
+    /// `to_u8(Unknown(x))` trả nguyên `x` để công cụ đọc-sửa-ghi giữ được
+    /// entry lạ; đừng tự tay dựng `Unknown` với byte của kind đã biết.
+    Unknown(u8),
 }
 
 impl EntryKind {
@@ -44,10 +49,11 @@ impl EntryKind {
             EntryKind::Audio => 4,
             EntryKind::Plugin => 5,
             EntryKind::Font => 6,
+            EntryKind::Unknown(v) => v,
         }
     }
-    fn from_u8(v: u8) -> Option<Self> {
-        Some(match v {
+    fn from_u8(v: u8) -> Self {
+        match v {
             0 => EntryKind::Meta,
             1 => EntryKind::StoryIr,
             2 => EntryKind::Strings,
@@ -55,8 +61,8 @@ impl EntryKind {
             4 => EntryKind::Audio,
             5 => EntryKind::Plugin,
             6 => EntryKind::Font,
-            _ => return None,
-        })
+            other => EntryKind::Unknown(other),
+        }
     }
 }
 
@@ -156,7 +162,10 @@ pub fn read_pack<R: Read>(r: &mut R) -> Result<Vec<PackEntry>, PackError> {
         return Err(PackError::BadMagic);
     }
     let ver = r_u32(r)?;
-    if ver != FORMAT_VERSION {
+    // mongpack-entries §5.1: đọc được mọi version cũ hơn trong cùng major;
+    // mới hơn thì từ chối. FORMAT_VERSION = 0 nên nhánh migrate còn rỗng —
+    // khi tăng version, thêm `match ver` chuyển đổi bố cục ngay tại đây.
+    if ver > FORMAT_VERSION {
         return Err(PackError::BadVersion(ver));
     }
     let mut codec = [0u8; 1];
@@ -174,8 +183,8 @@ pub fn read_pack<R: Read>(r: &mut R) -> Result<Vec<PackEntry>, PackError> {
             .map_err(|_| PackError::Corrupt("ten entry khong phai UTF-8".into()))?;
         let mut kind_b = [0u8; 1];
         r.read_exact(&mut kind_b)?;
-        let kind = EntryKind::from_u8(kind_b[0])
-            .ok_or_else(|| PackError::Corrupt(format!("kind {} la gi?", kind_b[0])))?;
+        // Kind lạ không phải gói hỏng — là gói mới hơn runtime (§5.2).
+        let kind = EntryKind::from_u8(kind_b[0]);
         let raw_len = r_u64(r)?;
         let comp_len = r_u64(r)?;
         let crc = r_u32(r)?;
@@ -248,6 +257,41 @@ mod tests {
                 data: vec![],
             },
         ]
+    }
+
+    /// §5.2: kind lạ đọc được và round-trip giữ nguyên — gói mới hơn không
+    /// giết runtime cũ.
+    #[test]
+    fn kind_la_khong_giet_goi() {
+        let entries = vec![
+            PackEntry {
+                name: "tuong_lai.bin".into(),
+                kind: EntryKind::Unknown(200),
+                data: vec![1, 2, 3],
+            },
+            PackEntry {
+                name: "story.ir".into(),
+                kind: EntryKind::StoryIr,
+                data: b"{}".to_vec(),
+            },
+        ];
+        let mut buf = Vec::new();
+        write_pack(&mut buf, &entries).unwrap();
+        let back = read_pack(&mut &buf[..]).unwrap();
+        assert_eq!(entries, back);
+    }
+
+    /// §5.1: version mới hơn runtime → từ chối rõ ràng, không đoán mò.
+    #[test]
+    fn version_moi_hon_bi_tu_choi() {
+        let mut buf = Vec::new();
+        write_pack(&mut buf, &sample()).unwrap();
+        // Header: magic 8B, rồi format_version u32 LE tại offset 8.
+        buf[8..12].copy_from_slice(&(FORMAT_VERSION + 1).to_le_bytes());
+        assert!(matches!(
+            read_pack(&mut &buf[..]),
+            Err(PackError::BadVersion(v)) if v == FORMAT_VERSION + 1
+        ));
     }
 
     #[test]

@@ -67,6 +67,33 @@ pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, P
         }
     }
 
+    // Quy ước: <dir>/plugins/*.rhai, id = tên file bỏ đuôi. File khác đuôi
+    // bị bỏ qua trong im lặng (editor hay để file tạm). Không có thư mục =
+    // không có plugin, không phải lỗi.
+    let mut plugins = BTreeMap::new();
+    let pdir = root.join("plugins");
+    if pdir.is_dir() {
+        let rd = std::fs::read_dir(&pdir).map_err(|source| ProjectError::Io {
+            path: pdir.display().to_string(),
+            source,
+        })?;
+        for entry in rd {
+            let p = entry
+                .map_err(|source| ProjectError::Io {
+                    path: pdir.display().to_string(),
+                    source,
+                })?
+                .path();
+            if p.extension().and_then(|s| s.to_str()) != Some("rhai") {
+                continue;
+            }
+            let Some(id) = p.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            plugins.insert(id.to_string(), read_text(&p)?);
+        }
+    }
+
     let locale = pick_locale(&out.story, locale)?;
     Ok(Loaded {
         story: out.story,
@@ -74,5 +101,6 @@ pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, P
         manifest,
         locale,
         assets,
+        plugins,
     })
 }
