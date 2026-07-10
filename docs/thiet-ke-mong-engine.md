@@ -156,6 +156,8 @@ Ngôn ngữ nhúng cho tầng một **đã chốt: `rhai`** cho v1. Ba lý do: r
 
 `mong-render` dùng `wgpu` (Vulkan/Metal/DX12/WebGPU). **Đã chốt:** WebGL2/GLES3 là sàn bắt buộc — renderer lõi không dùng compute shader, texture tối đa 4096, sRGB; hiệu ứng nâng cao đi qua capability check, có WebGPU thì đẹp hơn, không có vẫn chạy đúng. Nhu cầu VN đơn giản về hình — sprite 2D, background, transition (fade/dissolve/slide), particle nhẹ — nên renderer là một sprite batcher + vài shader transition, không kéo cả game engine tổng quát vào (không dùng Bevy cho runtime; giữ dependency mỏng để web build nhỏ).
 
+Sửa: "WebGL2 là sàn, WebGPU khi có" → hiện web luôn GL
+
 Chữ là phần khó nhất và là nơi Ren'Py hay lộ khuyết điểm với tiếng Việt: dùng `cosmic-text` để shaping đúng dấu tiếng Việt, CJK, và RTL; font fallback khai báo theo locale trong `mong-i18n`; typewriter chạy theo grapheme cluster chứ không theo byte (chữ "ế" không bao giờ hiện nửa chừng thành "e"). Sprite nhân vật ghép layer (thân + mặt + trang phục) như đã ghi ở mục 4, giảm khối lượng vẽ cho artist theo cấp số nhân.
 
 ## 9. Âm thanh

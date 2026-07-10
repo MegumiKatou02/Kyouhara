@@ -10,7 +10,7 @@
 - [x] M4.1 `mong-project` + `mong-cli pack`; desktop nạp được cả thư mục lẫn gói
 - [x] M4.2 `mong-audio` trên wasm
 - [x] M4.3 `shells/web`
-- [ ] M4.4 CI wasm + trần bundle size
+- [x] M4.4 CI wasm + trần bundle size
 - [ ] M4.5 Kiểm chứng ba trình duyệt
 
 **RFC-002 — `shells/common` (`mong-shell`).** Vòng lặp, cửa sổ, input, và việc
@@ -83,8 +83,12 @@ mới thêm tự phát hiện trong lần chạy đầu tiên.
    mà WebGPU spec đã bỏ → Chrome ≥ M135 từ chối `requestDevice`. Nâng wgpu (24+)
    để mở lại đường WebGPU. Không chặn DoD M4 (WebGL2 là sàn, mục 8), nhưng câu
    "có WebGPU thì đẹp hơn" hiện là lời hứa suông.
-9. `wasm-opt` chưa vào pipeline (binaryen chưa cài). Không chặn DoD — còn 75%
-   trần. CI M4.4 nên có, để trần đo trên đúng thứ người chơi tải.
+
+9. ~~`wasm-opt` chưa vào pipeline.~~ **Đóng bằng phép đo (2026-07-10).** `-Oz`
+   → 1.351.300 B gzip; `-Os` → 1.349.567 B; không dùng gì → 1.320.898 B. Cắt
+   11% byte thô nhưng xáo trộn code, deflate ăn ít đi. Thứ người chơi tải là
+   gzip. Không đưa vào CI. Lệnh đo lại nằm trong `build.ps1`.
+
 10. `naga` (compiler WGSL) nằm trong bundle dù shader là hằng số. Cắt được nếu
     ngân sách chật.
 
@@ -102,7 +106,7 @@ mới thêm tự phát hiện trong lần chạy đầu tiên.
 | Chrome | ✅ chữ, fade, crossfade, resize, rollback, audio-on-first-click |
 | Firefox | ✅ |
 | Safari | X **chưa chạy lần nào** |
-| Bundle < 5 MB gzip | ✅ |
+| Bundle < 5 MB gzip | ✅ 1.320.898 B (25% trần), CI canh |
 
 **Safari: hoãn có chủ đích, không phải đạt.** Không có phần cứng macOS; job
 `macos-latest` + `safaridriver` chưa viết. `Backends::GL` (nợ 8) mới ép ở M4.3
