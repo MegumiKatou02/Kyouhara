@@ -133,7 +133,7 @@ fn goto_trong_on_node_enter_khong_de_lai_event_oi() {
         &[("a.l1", "x"), ("b.l1", "y")],
         &[(
             "nhay",
-            r#"fn on_node_enter(m) { if m.node == "a" { goto("b"); } }"#,
+            r#"fn on_node_enter(m) { if m.node == "a" { goto_node("b"); } }"#,
         )],
     );
     assert_eq!(rt.line().unwrap().text, "y");
@@ -155,8 +155,8 @@ fn goto_day_chuyen_bi_ngan_sach_chan() {
         &[("a.l1", "x"), ("b.l1", "y")],
         &[(
             "lap",
-            r#"fn on_node_enter(m) { if m.node == "b" { goto("b"); } }
-               fn on_line_show(m) { if m.key == "a.l1" { goto("b"); } }"#,
+            r#"fn on_node_enter(m) { if m.node == "b" { goto_node("b"); } }
+               fn on_line_show(m) { if m.key == "a.l1" { goto_node("b"); } }"#,
         )],
     );
     // Nếu tới được đây là ngân sách đã chặn; VM phải đang đứng ở "b".

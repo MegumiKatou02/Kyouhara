@@ -347,9 +347,10 @@ fn register_ctx(engine: &mut Engine, shared: &Rc<RefCell<Shared>>) {
     });
 
     let sh = shared.clone();
-    engine.register_fn("goto", move |node: &str| {
+    // rhai dành sẵn từ khoá `goto` — binding phải mang tên khác.
+    engine.register_fn("goto_node", move |node: &str| {
         let mut s = sh.borrow_mut();
-        if s.allowed("goto", Class::Logic) {
+        if s.allowed("goto_node", Class::Logic) {
             s.actions.push(Action::Goto {
                 node: node.to_string(),
             });

@@ -144,6 +144,17 @@ fn ext_dispatch_va_khong_ai_nhan() {
 }
 
 #[test]
+fn goto_node_tao_action_va_khong_loi_bien_dich() {
+    let mut h = host(&[("a", r#"fn on_game_start() { goto_node("b"); }"#)]);
+    let acts = h.fire(Hook::GameStart, &json!({}), &vars(&[]));
+    assert_eq!(acts, vec![Action::Goto { node: "b".into() }]);
+    assert!(
+        h.take_log().is_empty(),
+        "khong duoc co loi bien dich/runtime"
+    );
+}
+
+#[test]
 fn vong_lap_vo_han_bi_ngan_sach_chan() {
     let mut h = host(&[("treo", "fn on_game_start() { loop {} }")]);
     let acts = h.fire(Hook::GameStart, &json!({}), &vars(&[])); // phải trả về, không treo
