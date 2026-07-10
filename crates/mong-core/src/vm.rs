@@ -5,7 +5,7 @@
 //! Mỗi lần dừng chờ, VM tự chụp snapshot — nền tảng của rollback,
 //! time-travel và save/load.
 
-use crate::ir::{ChoiceArm, Instr, SayOpts, StagePos, StringKey};
+use crate::ir::{ChoiceArm, Effect, Instr, SayOpts, SetOp, StagePos, StringKey};
 use crate::story::Story;
 use crate::vars::VarStore;
 use crate::{Value, FORMAT_VERSION};
@@ -207,6 +207,52 @@ pub enum LoadOutcome {
 }
 
 impl Vm {
+    /// Ghi một biến từ bên ngoài (plugin `set_var`). Ghi cả vào snapshot
+    /// gần nhất: hook plugin bắn *tại* điểm dừng, nên hậu quả của nó thuộc
+    /// về trạng thái của điểm dừng đó — rollback quay về đây phải thấy giá
+    /// trị sau-hook, và hook không bắn lại khi replay (spec-plugin mục 5).
+    pub fn set_var(&mut self, name: &str, value: Value) -> Result<(), VmError> {
+        let e = Effect {
+            var: name.to_string(),
+            op: SetOp::Assign,
+            value,
+        };
+        self.vars.apply(&e)?;
+        if let Some(s) = self.snapshots.last_mut() {
+            s.vars.apply(&e)?;
+        }
+        Ok(())
+    }
+
+    /// Nhảy tới đầu một node theo yêu cầu ngoài luồng IR (plugin `goto`,
+    /// editor debug sau này). Ngữ nghĩa như `jump`: không đụng call stack.
+    /// Hợp lệ ở mọi điểm dừng, kể cả `Ended` — plugin được phép đổi hướng
+    /// kết thúc. Node không tồn tại → `UnknownNode`, VM giữ nguyên chỗ cũ.
+    pub fn jump_to(&mut self, node: &str) -> Result<Vec<VmEvent>, VmError> {
+        if !matches!(
+            self.status,
+            VmStatus::AwaitAdvance | VmStatus::AwaitChoice | VmStatus::Ended
+        ) {
+            return Err(VmError::NotAwaitingAdvance);
+        }
+        let idx = self
+            .story
+            .node_index(node)
+            .ok_or_else(|| VmError::UnknownNode(node.to_string()))?;
+        self.pending.clear();
+        self.cursor = Cursor {
+            node: idx,
+            parents: Vec::new(),
+            ip: 0,
+        };
+        self.status = VmStatus::Running;
+        let mut ev = vec![VmEvent::NodeEntered {
+            node: node.to_string(),
+        }];
+        ev.extend(self.run()?);
+        Ok(ev)
+    }
+
     /// Tạo save slot từ điểm chờ gần nhất. `None` nếu VM chưa có điểm chờ nào
     /// (chưa `start()`).
     pub fn save(&self, label: impl Into<String>, created_at: Option<String>) -> Option<SaveSlot> {

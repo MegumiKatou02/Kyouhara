@@ -17,6 +17,11 @@ impl From<BTreeMap<String, Value>> for VarStore {
 }
 
 impl VarStore {
+    /// Duyệt toàn bộ biến — runtime mirror sang plugin host mỗi lần gọi hook.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Value)> {
+        self.0.iter().map(|(k, v)| (k.as_str(), v))
+    }
+
     /// Ghi đè trực tiếp (cho `rand`/`set_expr` — kiểu đã được kiểm ở nơi gọi).
     pub fn set(&mut self, key: &str, value: Value) {
         self.0.insert(key.to_string(), value);

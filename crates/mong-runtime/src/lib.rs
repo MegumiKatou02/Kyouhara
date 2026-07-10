@@ -14,11 +14,22 @@ pub mod ui;
 pub use draw::{DrawItem, Fit, VIRTUAL_H, VIRTUAL_W};
 
 use mong_assets::Manifest;
-use mong_core::{PresentedChoice, SayOpts, Story, Vm, VmError, VmEvent, VmStatus};
+use mong_core::{PresentedChoice, SayOpts, Story, Value, VarStore, Vm, VmError, VmEvent, VmStatus};
 use mong_i18n::Catalog;
+use mong_plugin::{Action, Hook, Host};
+use serde_json::json;
+use std::collections::BTreeMap;
 
 pub use stage::{Stage, StageChar, Transition, TransitionKind};
 pub use text::Typewriter;
+
+/// Hiệu ứng rung do plugin yêu cầu — trình diễn thuần, không vào snapshot.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Shake {
+    amp: f32,
+    total: f32,
+    left: f32,
+}
 
 /// Lệnh gửi xuống mong-audio. Runtime không biết kira là gì.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,6 +54,9 @@ pub struct Line {
     pub tw: Typewriter,
     /// `opts.exit`: giấu người nói khi dòng này bị bỏ qua.
     exit: bool,
+    /// Số grapheme đã bắn `on_type`. Skip (reveal_all) đặt = total: người
+    /// chơi bấm bỏ qua thì không dội một tràng sfx gõ chữ.
+    typed_fired: usize,
 }
 
 impl Line {
@@ -68,6 +82,13 @@ pub struct Runtime {
     audio: Vec<AudioCmd>,
     wait_left: Option<f32>,
     cps: f32,
+
+    host: Option<Host>,
+    shake: Option<Shake>,
+    /// Ngân sách goto dây chuyền trong một lượt input/tick — chặn plugin
+    /// on_node_enter goto lẫn nhau vô hạn. Reset ở mỗi entry công khai.
+    goto_left: u8,
+    jump_gen: u64,
 }
 
 impl Runtime {
@@ -89,6 +110,10 @@ impl Runtime {
             audio: Vec::new(),
             wait_left: None,
             cps: DEFAULT_CPS,
+            host: None,
+            shake: None,
+            goto_left: 8,
+            jump_gen: 0,
         })
     }
 
@@ -131,34 +156,97 @@ impl Runtime {
         std::mem::take(&mut self.audio)
     }
 
+    /// Nạp plugin từ Loaded.plugins. Gọi TRƯỚC `start()` — on_game_start
+    /// bắn trong start. Lỗi biên dịch từng plugin chỉ vô hiệu plugin đó.
+    pub fn set_plugins(&mut self, sources: &BTreeMap<String, String>) {
+        if sources.is_empty() {
+            self.host = None;
+            return;
+        }
+        self.host = Some(Host::new(sources));
+        self.drain_log();
+    }
+
+    /// Offset sân khấu do hiệu ứng rung — shell cộng vào toạ độ khi vẽ.
+    pub fn shake_offset(&self) -> (f32, f32) {
+        let Some(s) = &self.shake else {
+            return (0.0, 0.0);
+        };
+        let t = s.total - s.left;
+        let k = s.amp * (s.left / s.total).max(0.0); // decay tuyến tính
+        (k * (t * 55.0).sin(), k * (t * 47.0).cos())
+    }
+
+    pub fn vars(&self) -> &VarStore {
+        self.vm.vars()
+    }
+
     pub fn start(&mut self) -> Result<(), VmError> {
+        self.goto_left = 8;
         let evs = self.vm.start()?;
-        self.apply(evs);
+        let gen = self.jump_gen;
+        self.fire(Hook::GameStart, json!({}));
+        if self.jump_gen == gen {
+            self.apply(evs, true);
+        }
         Ok(())
     }
 
-    /// `dt` do shell đo — core không bao giờ thấy nó.
     pub fn tick(&mut self, dt: f32) -> Result<(), VmError> {
+        self.goto_left = 8;
         self.stage.tick(dt);
+        if let Some(s) = &mut self.shake {
+            s.left -= dt;
+            if s.left <= 0.0 {
+                self.shake = None;
+            }
+        }
+        // Gom grapheme mới lộ rồi mới bắn hook — né mượn self hai lần.
+        let mut typed: Vec<(usize, String)> = Vec::new();
+        let mut total = 0;
         if let Some(l) = &mut self.line {
+            let before = l.typed_fired;
             l.tw.tick(dt, self.cps);
+            let now = l.tw.shown();
+            if now > before && self.host.is_some() {
+                use unicode_segmentation::UnicodeSegmentation;
+                for (i, g) in l
+                    .text
+                    .graphemes(true)
+                    .enumerate()
+                    .skip(before)
+                    .take(now - before)
+                {
+                    typed.push((i, g.to_string()));
+                }
+            }
+            l.typed_fired = now;
+            total = l.tw.total();
+        }
+        for (i, g) in typed {
+            self.fire(
+                Hook::Type,
+                json!({"grapheme": g, "index": i, "total": total}),
+            );
         }
         if let Some(left) = &mut self.wait_left {
             *left -= dt;
             if *left <= 0.0 {
                 self.wait_left = None;
-                self.step_vm()?; // `wait` hết giờ = advance (spec-ir)
+                self.step_vm()?;
             }
         }
         Ok(())
     }
 
     pub fn input(&mut self, input: Input) -> Result<(), VmError> {
+        self.goto_left = 8;
         match input {
             // Đang gõ chữ: click đầu hiện hết dòng, click sau mới sang dòng mới.
             Input::Advance if self.line.as_ref().is_some_and(|l| !l.tw.done()) => {
                 if let Some(l) = &mut self.line {
                     l.tw.reveal_all();
+                    l.typed_fired = l.tw.total(); // skip: không bắn on_type dồn
                 }
                 Ok(())
             }
@@ -178,10 +266,15 @@ impl Runtime {
                 if self.vm.status() != VmStatus::AwaitChoice {
                     return Err(VmError::NotAwaitingChoice);
                 }
+                let key = self.choices.get(i).map(|c| c.text.clone());
                 self.stage_history.push(self.stage.clone());
                 self.choices.clear();
                 let evs = self.vm.choose(i)?;
-                self.apply(evs);
+                let gen = self.jump_gen;
+                self.fire(Hook::ChoicePicked, json!({"index": i, "key": key}));
+                if self.jump_gen == gen {
+                    self.apply(evs, true);
+                }
                 Ok(())
             }
             Input::Rollback => {
@@ -190,7 +283,7 @@ impl Runtime {
                     self.line = None;
                     self.choices.clear();
                     self.wait_left = None;
-                    self.apply(evs);
+                    self.apply(evs, false); // replay: hook không bắn (spec-plugin 5.2)
                 }
                 Ok(())
             }
@@ -214,12 +307,18 @@ impl Runtime {
         }
         self.line = None;
         let evs = self.vm.advance()?;
-        self.apply(evs);
+        self.apply(evs, true);
         Ok(())
     }
 
-    fn apply(&mut self, evs: Vec<VmEvent>) {
+    fn apply(&mut self, evs: Vec<VmEvent>, fresh: bool) {
+        let gen = self.jump_gen;
         for e in evs {
+            // Hook vừa bắn có thể đã goto — phần còn lại của batch này
+            // thuộc về node cũ, áp tiếp là desync trình diễn với VM.
+            if self.jump_gen != gen {
+                break;
+            }
             match e {
                 VmEvent::SceneChanged { scene, transition } => {
                     self.stage
@@ -239,22 +338,44 @@ impl Runtime {
                     speaker,
                     text,
                     opts,
-                } => self.begin_line(speaker, &text, opts),
+                } => self.begin_line(speaker, &text, opts, fresh),
                 VmEvent::Choices { arms } => self.choices = arms,
                 VmEvent::Wait { ms } => self.wait_left = Some(ms as f32 / 1000.0),
                 VmEvent::Sfx { asset } => self.audio.push(AudioCmd::Sfx(asset)),
                 VmEvent::Bgm { asset } => self.audio.push(AudioCmd::Bgm(asset)),
-                VmEvent::Ext { command, .. } => {
-                    // Không ai xử lý = bỏ qua, không phải lỗi cứng (spec-ir).
-                    eprintln!("ext '{command}': khong co plugin dang ky, bo qua");
+                VmEvent::Ext { command, args } => {
+                    if !fresh {
+                        // Replay: hậu quả lần đầu đã nằm trong state, im lặng.
+                    } else if self.host.is_some() {
+                        let vars = vars_json(self.vm.vars());
+                        let r = self.host.as_mut().unwrap().ext(&command, &args, &vars);
+                        self.drain_log();
+                        match r {
+                            Some(acts) => self.run_actions(acts),
+                            None => {
+                                eprintln!("ext '{command}': khong co plugin dang ky, bo qua")
+                            }
+                        }
+                    } else {
+                        eprintln!("ext '{command}': khong co plugin dang ky, bo qua");
+                    }
                 }
-                VmEvent::NodeEntered { .. } | VmEvent::Ended => {}
+                VmEvent::NodeEntered { node } => {
+                    if fresh {
+                        self.fire(Hook::NodeEnter, json!({"node": node}));
+                    }
+                }
+                VmEvent::Ended => {
+                    if fresh {
+                        self.fire(Hook::GameEnd, json!({}));
+                    }
+                }
             }
         }
     }
 
     /// `say` mang cả dữ liệu sân khấu: pose/pos đưa người nói lên nếu chưa có.
-    fn begin_line(&mut self, speaker: Option<String>, key: &str, opts: SayOpts) {
+    fn begin_line(&mut self, speaker: Option<String>, key: &str, opts: SayOpts, fresh: bool) {
         if let Some(id) = &speaker {
             if opts.pose.is_some() || opts.pos.is_some() {
                 let pos = opts.pos.unwrap_or(mong_core::StagePos::Center);
@@ -265,13 +386,130 @@ impl Runtime {
         if let Some(sfx) = opts.sfx {
             self.audio.push(AudioCmd::Sfx(sfx));
         }
-        let text = self.catalog.text_or_key(&self.locale, key).to_string();
-        let tw = Typewriter::new(&text);
+        let looked = self.catalog.text_or_key(&self.locale, key).to_string();
+        // Filter chạy cả khi replay — nó là một phần của "dựng dòng thoại",
+        // và phải thuần túy nên tái lập đúng (spec-plugin mục 2, 5.3).
+        let text = if self.host.is_some() {
+            let vars = vars_json(self.vm.vars());
+            let t =
+                self.host
+                    .as_mut()
+                    .unwrap()
+                    .filter_text(speaker.as_deref(), key, &looked, &vars);
+            self.drain_log();
+            t
+        } else {
+            looked
+        };
+        let mut tw = Typewriter::new(&text);
+        if self.cps <= 0.0 {
+            tw.reveal_all(); // cps ≤ 0 nghĩa là "hiện tức thì"
+        }
+        let typed_fired = tw.shown();
         self.line = Some(Line {
-            speaker,
+            speaker: speaker.clone(),
             tw,
-            text,
+            text: text.clone(),
             exit: opts.exit,
+            typed_fired,
         });
+        if fresh {
+            self.fire(
+                Hook::LineShow,
+                json!({"speaker": speaker, "key": key, "text": text}),
+            );
+        }
     }
+
+    fn fire(&mut self, hook: Hook, payload: serde_json::Value) {
+        if self.host.is_none() {
+            return;
+        }
+        let vars = vars_json(self.vm.vars());
+        let acts = self.host.as_mut().unwrap().fire(hook, &payload, &vars);
+        self.drain_log();
+        self.run_actions(acts);
+    }
+
+    fn drain_log(&mut self) {
+        if let Some(h) = &mut self.host {
+            for l in h.take_log() {
+                eprintln!("{l}");
+            }
+        }
+    }
+
+    /// Áp action plugin. `goto`: cái cuối trong batch thắng, áp ngay (VM
+    /// đang ở điểm dừng), có ngân sách chống dây chuyền vô hạn.
+    fn run_actions(&mut self, acts: Vec<Action>) {
+        let mut goto: Option<String> = None;
+        for a in acts {
+            match a {
+                Action::SetVar { name, value } => match from_json(&value) {
+                    Some(v) => {
+                        if let Err(e) = self.vm.set_var(&name, v) {
+                            eprintln!("plugin set_var '{name}': {e}");
+                        }
+                    }
+                    None => {
+                        eprintln!("plugin set_var '{name}': kieu khong ho tro (chi Int/Bool/Str)")
+                    }
+                },
+                Action::Goto { node } => goto = Some(node),
+                Action::PlaySfx { asset } => self.audio.push(AudioCmd::Sfx(asset)),
+                Action::Shake { amplitude, ms } => {
+                    let total = ms as f32 / 1000.0;
+                    if total > 0.0 && amplitude > 0.0 {
+                        self.shake = Some(Shake {
+                            amp: amplitude,
+                            total,
+                            left: total,
+                        });
+                    }
+                }
+                Action::SetCps { cps } => self.cps = cps,
+            }
+        }
+        if let Some(node) = goto {
+            if self.goto_left == 0 {
+                eprintln!("plugin goto '{node}': qua nhieu goto lien tiep, bo qua");
+                return;
+            }
+            self.goto_left -= 1;
+            match self.vm.jump_to(&node) {
+                Ok(evs) => {
+                    self.jump_gen += 1;
+                    self.stage_history.push(self.stage.clone());
+                    self.line = None;
+                    self.choices.clear();
+                    self.wait_left = None;
+                    self.apply(evs, true);
+                }
+                Err(e) => eprintln!("plugin goto '{node}': {e} — bo qua"),
+            }
+        }
+    }
+}
+
+fn to_json(v: &Value) -> serde_json::Value {
+    match v {
+        Value::Int(i) => json!(i),
+        Value::Bool(b) => json!(b),
+        Value::Str(s) => json!(s),
+    }
+}
+
+fn from_json(v: &serde_json::Value) -> Option<Value> {
+    match v {
+        serde_json::Value::Number(n) => n.as_i64().map(Value::Int),
+        serde_json::Value::Bool(b) => Some(Value::Bool(*b)),
+        serde_json::Value::String(s) => Some(Value::Str(s.clone())),
+        _ => None,
+    }
+}
+
+fn vars_json(vars: &VarStore) -> BTreeMap<String, serde_json::Value> {
+    vars.iter()
+        .map(|(k, v)| (k.to_string(), to_json(v)))
+        .collect()
 }

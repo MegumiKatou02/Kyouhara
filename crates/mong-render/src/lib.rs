@@ -389,6 +389,7 @@ impl Renderer {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         sprites: &[Sprite],
+        offset: (f32, f32),
     ) {
         let n = sprites.len().min(MAX_INSTANCES);
         if n < sprites.len() {
@@ -401,6 +402,9 @@ impl Renderer {
             .iter()
             .filter_map(|s| {
                 let t = self.textures.get(&s.texture)?;
+                let mut rect = self.rect(s.fit, t.size);
+                rect[0] += offset.0;
+                rect[1] += offset.1;
                 Some((
                     Instance {
                         rect: self.rect(s.fit, t.size),

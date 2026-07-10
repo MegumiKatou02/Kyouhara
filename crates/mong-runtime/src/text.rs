@@ -14,6 +14,11 @@ pub struct Typewriter {
 const EPS: f64 = 1e-6;
 
 impl Typewriter {
+    /// Số grapheme đã hiện — runtime dùng để bắn `on_type` đúng phần mới lộ.
+    pub fn shown(&self) -> usize {
+        self.shown
+    }
+
     pub fn new(text: &str) -> Self {
         let mut bounds: Vec<usize> = text.grapheme_indices(true).map(|(i, _)| i).collect();
         bounds.push(text.len());

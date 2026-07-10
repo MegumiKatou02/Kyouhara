@@ -8,6 +8,8 @@ license.workspace = true
 mong-core = { path = "../mong-core" }
 mong-i18n = { path = "../mong-i18n" }
 mong-assets = { path = "../mong-assets" }
+mong-plugin = { path = "../mong-plugin" }
+serde_json = "1"
 unicode-segmentation = { workspace = true }
 
 [dev-dependencies]

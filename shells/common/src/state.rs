@@ -134,6 +134,8 @@ impl State {
             loaded.locale.clone(),
         )
         .expect("cot truyen hong");
+
+        rt.set_plugins(&loaded.plugins);
         rt.start().expect("khong start duoc");
 
         State {
@@ -210,7 +212,8 @@ impl State {
             (self.config.width, self.config.height),
             (VIRTUAL_W, VIRTUAL_H),
         );
-        self.renderer.draw(&view, vp, &sprites);
+        self.renderer
+            .draw(&view, vp, &sprites, self.rt.shake_offset());
         frame.present();
 
         if self.rt.status() == VmStatus::Ended {

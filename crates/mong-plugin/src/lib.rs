@@ -185,7 +185,7 @@ impl Host {
     ) -> Vec<Action> {
         self.begin(hook.class(), vars);
         let name = hook.fn_name();
-        let payload = self.to_dyn(payload);
+        let payload = self.value_to_dynamic(payload);
         for i in 0..self.plugins.len() {
             self.call(i, name, &payload);
         }
@@ -217,7 +217,7 @@ impl Host {
                 continue;
             }
             self.shared.borrow_mut().current = id.clone();
-            let payload = self.to_dyn(&serde_json::json!({
+            let payload = self.value_to_dynamic(&serde_json::json!({
                 "speaker": speaker, "key": key, "text": cur,
             }));
             match self
@@ -246,7 +246,7 @@ impl Host {
             return None;
         }
         self.begin(Class::Logic, vars);
-        let args = self.to_dyn(args);
+        let args = self.value_to_dynamic(args);
         for i in 0..self.plugins.len() {
             self.call(i, &name, &args);
         }
@@ -272,7 +272,7 @@ impl Host {
         std::mem::take(&mut self.shared.borrow_mut().actions)
     }
 
-    fn to_dyn(&mut self, v: &Value) -> Dynamic {
+    fn value_to_dynamic(&mut self, v: &Value) -> Dynamic {
         to_dynamic(v).unwrap_or_else(|e| {
             self.shared
                 .borrow_mut()
