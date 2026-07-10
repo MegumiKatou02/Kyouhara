@@ -52,6 +52,7 @@ mong/
 │   ├── mong-i18n/             # locale, fallback, plural, font map
 │   └── mong-runtime/          # ghép tất cả: vòng lặp, event, input
 ├── shells/
+│   ├── common/               # 
 │   ├── desktop/               # winit; Windows/macOS/Linux
 │   ├── web/                   # wasm-bindgen; WebGPU, fallback WebGL2
 │   ├── android/               # cargo-ndk + shell Kotlin mỏng
@@ -177,12 +178,12 @@ Mộng Studio thật = Tauri app: backend Rust dùng thẳng `mong-script` + `mo
 
 ## 12. Bảng quyết định công nghệ và câu hỏi mở
 
-| Hạng mục | Chọn | Lý do | Phương án dự phòng |
-|---|---|---|---|
+| Hạng mục | Chọn | Lý do | Phương án dự phòng | Ghi chú |
+|---|---|---|---|---|
 | Ngôn ngữ lõi | Rust | native + WASM một codebase, an toàn bộ nhớ | — |
 | Graphics | wgpu | phủ 4 backend, cộng đồng mạnh | fallback WebGL2 có sẵn trong wgpu |
 | Text shaping | cosmic-text | shaping + fallback thuần Rust | rustybuzz trực tiếp |
-| Audio | kira | thiết kế cho game, web ổn | rodio |
+| Audio | kira  | thiết kế cho game, web ổn | rodio | web dùng WebAudio sink riêng; AudioSink là trait vì vậy |
 | Parser DSL | pest | grammar tách file, dễ đọc dễ test | nom |
 | Script plugin | **rhai (đã chốt)** | thuần Rust chạy WASM ngay; cú pháp gần JS hợp cộng đồng web-native; ABI trung lập | thêm backend Lua/WASM sau 1.0, không phá hợp đồng |
 | Editor shell | Tauri | tái dùng UI web, backend Rust chung code | egui (viết lại UI toàn bộ) |

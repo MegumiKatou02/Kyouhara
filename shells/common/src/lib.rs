@@ -13,11 +13,11 @@ pub use app::run;
 use mong_audio::AudioSink;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn audio_moi() -> Box<dyn AudioSink> {
+pub(crate) fn new_audio() -> Box<dyn AudioSink> {
     Box::new(mong_audio::KiraAudio::new().expect("khong mo duoc thiet bi am thanh"))
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn audio_moi() -> Box<dyn AudioSink> {
+pub(crate) fn new_audio() -> Box<dyn AudioSink> {
     Box::new(mong_audio::WebAudio::new().expect("WebAudio::new khong bao gio fail"))
 }

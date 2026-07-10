@@ -21,11 +21,11 @@ use web_sys::{
     AudioBuffer, AudioBufferSourceNode, AudioContext, AudioScheduledSourceNode, GainNode,
 };
 
-fn canh_bao(m: &str) {
+fn warn(m: &str) {
     web_sys::console::warn_1(&JsValue::from_str(m));
 }
 
-fn loi(e: JsValue) -> AudioError {
+fn js_err(e: JsValue) -> AudioError {
     AudioError::Backend(format!("{e:?}"))
 }
 
@@ -66,14 +66,14 @@ impl Default for WebAudio {
 }
 
 impl Inner {
-    fn dung_thiet_bi(&mut self) -> Result<(), AudioError> {
-        let ctx = AudioContext::new().map_err(loi)?;
+    fn init_device(&mut self) -> Result<(), AudioError> {
+        let ctx = AudioContext::new().map_err(js_err)?;
         let dest = ctx.destination();
         for bus in Bus::ALL {
-            let g = ctx.create_gain().map_err(loi)?;
+            let g = ctx.create_gain().map_err(js_err)?;
             g.gain()
                 .set_value(self.volumes.get(&bus).copied().unwrap_or(1.0));
-            g.connect_with_audio_node(&dest).map_err(loi)?;
+            g.connect_with_audio_node(&dest).map_err(js_err)?;
             self.buses.insert(bus, g);
         }
         self.ctx = Some(ctx);
@@ -82,7 +82,7 @@ impl Inner {
 
     /// Đưa trạng thái thật về khớp `want_bgm`, rồi xả sfx đang chờ buffer.
     /// Gọi lại sau mỗi lần một buffer giải mã xong.
-    fn dong_bo(&mut self) {
+    fn sync(&mut self) {
         let Some(ctx) = self.ctx.clone() else { return };
 
         let dang_dung = self.current.as_ref().map(|(id, ..)| id.clone());
@@ -93,8 +93,8 @@ impl Inner {
                 Some(id) => {
                     let id = id.clone();
                     self.fade_out();
-                    if let Err(e) = self.phat_bgm(&ctx, &id) {
-                        canh_bao(&e.to_string());
+                    if let Err(e) = self.play_bgm(&ctx, &id) {
+                        warn(&e.to_string());
                     }
                 }
                 None => self.fade_out(),
@@ -104,8 +104,8 @@ impl Inner {
         let cho = std::mem::take(&mut self.pending_sfx);
         for id in cho {
             if self.buffers.contains_key(&id) {
-                if let Err(e) = self.phat_sfx(&ctx, &id) {
-                    canh_bao(&e.to_string());
+                if let Err(e) = self.play_sfx(&ctx, &id) {
+                    warn(&e.to_string());
                 }
             } else {
                 self.pending_sfx.push(id);
@@ -113,22 +113,22 @@ impl Inner {
         }
     }
 
-    fn phat_bgm(&mut self, ctx: &AudioContext, id: &str) -> Result<(), AudioError> {
+    fn play_bgm(&mut self, ctx: &AudioContext, id: &str) -> Result<(), AudioError> {
         let buf = &self.buffers[id];
-        let src = ctx.create_buffer_source().map_err(loi)?;
+        let src = ctx.create_buffer_source().map_err(js_err)?;
         src.set_buffer(Some(buf));
         src.set_loop(true);
 
-        let g = ctx.create_gain().map_err(loi)?;
+        let g = ctx.create_gain().map_err(js_err)?;
         g.gain().set_value(0.0);
         g.gain()
             .linear_ramp_to_value_at_time(1.0, ctx.current_time() + CROSSFADE_SECS)
-            .map_err(loi)?;
+            .map_err(js_err)?;
 
-        src.connect_with_audio_node(&g).map_err(loi)?;
+        src.connect_with_audio_node(&g).map_err(js_err)?;
         g.connect_with_audio_node(&self.buses[&Bus::Bgm])
-            .map_err(loi)?;
-        src.start().map_err(loi)?;
+            .map_err(js_err)?;
+        src.start().map_err(js_err)?;
 
         self.current = Some((id.to_string(), src, g));
         Ok(())
@@ -146,28 +146,28 @@ impl Inner {
             .gain()
             .set_value_at_time(g.gain().value(), ctx.current_time());
         if let Err(e) = g.gain().linear_ramp_to_value_at_time(0.0, het) {
-            canh_bao(&format!("{:?}", e));
+            warn(&format!("{:?}", e));
         }
         // `AudioBufferSourceNode::stop_with_when` deprecated; lớp cha thì không.
         let sched: &AudioScheduledSourceNode = src.as_ref();
         if let Err(e) = sched.stop_with_when(het) {
-            canh_bao(&format!("{:?}", e));
+            warn(&format!("{:?}", e));
         }
     }
 
-    fn phat_sfx(&self, ctx: &AudioContext, id: &str) -> Result<(), AudioError> {
-        let src = ctx.create_buffer_source().map_err(loi)?;
+    fn play_sfx(&self, ctx: &AudioContext, id: &str) -> Result<(), AudioError> {
+        let src = ctx.create_buffer_source().map_err(js_err)?;
         src.set_buffer(Some(&self.buffers[id]));
         src.connect_with_audio_node(&self.buses[&Bus::Sfx])
-            .map_err(loi)?;
-        src.start().map_err(loi)?;
+            .map_err(js_err)?;
+        src.start().map_err(js_err)?;
         Ok(())
     }
 }
 
 /// `decodeAudioData` là async; `register` thì không. Nên: nhớ bytes lúc
 /// register, giải mã hàng loạt lúc unlock, mỗi lần xong lại `dong_bo`.
-fn giai_ma(inner: Rc<RefCell<Inner>>, id: String, bytes: Vec<u8>) {
+fn decode(inner: Rc<RefCell<Inner>>, id: String, bytes: Vec<u8>) {
     let ctx = match inner.borrow().ctx.clone() {
         Some(c) => c,
         None => return,
@@ -177,16 +177,16 @@ fn giai_ma(inner: Rc<RefCell<Inner>>, id: String, bytes: Vec<u8>) {
         let arr = js_sys::Uint8Array::from(&bytes[..]).buffer();
         let promise = match ctx.decode_audio_data(&arr) {
             Ok(p) => p,
-            Err(e) => return canh_bao(&format!("{id}: {e:?}")),
+            Err(e) => return warn(&format!("{id}: {e:?}")),
         };
         match JsFuture::from(promise).await {
             Ok(v) => {
                 let buf: AudioBuffer = v.unchecked_into();
                 let mut i = inner.borrow_mut();
                 i.buffers.insert(id, buf);
-                i.dong_bo();
+                i.sync();
             }
-            Err(e) => canh_bao(&AudioError::Decode(format!("{id}: {e:?}")).to_string()),
+            Err(e) => warn(&AudioError::Decode(format!("{id}: {e:?}")).to_string()),
         }
     });
 }
@@ -196,7 +196,7 @@ impl AudioSink for WebAudio {
         let mut i = self.inner.borrow_mut();
         if i.ctx.is_some() {
             drop(i);
-            giai_ma(self.inner.clone(), id.to_string(), bytes);
+            decode(self.inner.clone(), id.to_string(), bytes);
         } else {
             i.raw.insert(id.to_string(), bytes);
         }
@@ -206,17 +206,17 @@ impl AudioSink for WebAudio {
     fn bgm(&mut self, id: Option<&str>) {
         let mut i = self.inner.borrow_mut();
         i.want_bgm = id.map(String::from);
-        i.dong_bo();
+        i.sync();
     }
 
     fn sfx(&mut self, id: &str) {
         let mut i = self.inner.borrow_mut();
         if !i.raw.contains_key(id) && !i.buffers.contains_key(id) {
-            canh_bao(&AudioError::UnknownSound(id.into()).to_string());
+            warn(&AudioError::UnknownSound(id.into()).to_string());
             return;
         }
         i.pending_sfx.push(id.to_string());
-        i.dong_bo();
+        i.sync();
     }
 
     fn set_bus_volume(&mut self, bus: Bus, volume: f32) {
@@ -234,14 +234,14 @@ impl AudioSink for WebAudio {
             if i.ctx.is_some() {
                 return;
             }
-            if let Err(e) = i.dung_thiet_bi() {
-                canh_bao(&e.to_string());
+            if let Err(e) = i.init_device() {
+                warn(&e.to_string());
                 return;
             }
             std::mem::take(&mut i.raw)
         };
         for (id, bytes) in raw {
-            giai_ma(self.inner.clone(), id, bytes);
+            decode(self.inner.clone(), id, bytes);
         }
     }
 }

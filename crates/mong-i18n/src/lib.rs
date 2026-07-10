@@ -71,6 +71,11 @@ impl Catalog {
         self.tables.get(locale)?.get(key).map(String::as_str)
     }
 
+    /// Bảng thô của một locale. `mong-cli` cần để chạy L022–L024.
+    pub fn table(&self, locale: &str) -> Option<&Table> {
+        self.tables.get(locale)
+    }
+
     /// Tra key ở `locale`, fallback về defaultLocale (spec-mongscript mục 7).
     pub fn resolve(&self, locale: &str, key: &str) -> Resolved<'_> {
         if let Some(t) = self.get(locale, key) {

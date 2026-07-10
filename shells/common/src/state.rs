@@ -12,7 +12,7 @@ const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 #[cfg(target_arch = "wasm32")]
 const BACKENDS: wgpu::Backends = wgpu::Backends::GL;
 
-use crate::audio_moi;
+use crate::new_audio;
 use mong_audio::AudioSink;
 use mong_core::VmStatus;
 use mong_project::Loaded;
@@ -36,7 +36,7 @@ pub(crate) struct State {
     audio: Box<dyn AudioSink>,
     /// ĐỔI 3: web đòi `unlock()` nằm trong ngăn xếp cử chỉ người dùng. Desktop
     /// thì input đầu tiên tới ngay, nên một đường đi cho cả hai.
-    da_unlock: bool,
+    unlocked: bool,
     textures: HashMap<String, TextureId>,
     /// 1×1 trắng: hộp thoại là một quad tô màu bằng tint.
     white: TextureId,
@@ -119,7 +119,7 @@ impl State {
         let atlas = renderer.create_glyph_atlas();
 
         // ĐỔI 4: không `unlock()` ở đây nữa — dời vào `input()`.
-        let mut audio = audio_moi();
+        let mut audio = new_audio();
         for (id, bytes) in loaded.sounds() {
             if let Err(e) = audio.register(id, bytes.to_vec()) {
                 eprintln!("{e}");
@@ -145,7 +145,7 @@ impl State {
             atlas,
             rt,
             audio,
-            da_unlock: false,
+            unlocked: false,
             textures,
             white,
             families,
@@ -167,9 +167,9 @@ impl State {
     pub(crate) fn input(&mut self, input: Input) {
         // Cử chỉ đầu tiên mở thiết bị âm thanh. Trên desktop `unlock` là
         // no-op ngoài việc xả hàng đợi; trên web nó dựng `AudioContext`.
-        if !self.da_unlock {
+        if !self.unlocked {
             self.audio.unlock();
-            self.da_unlock = true;
+            self.unlocked = true;
         }
         // Chọn sai chỉ số / bấm khi không chờ = bỏ qua, không sập game.
         if let Err(e) = self.rt.input(input) {

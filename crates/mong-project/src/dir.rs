@@ -11,14 +11,14 @@ use mong_i18n::Table;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-fn doc_text(p: &Path) -> Result<String, ProjectError> {
+fn read_text(p: &Path) -> Result<String, ProjectError> {
     std::fs::read_to_string(p).map_err(|source| ProjectError::Io {
         path: p.display().to_string(),
         source,
     })
 }
 
-fn doc_bytes(p: &Path) -> Result<Vec<u8>, ProjectError> {
+fn read_bytes(p: &Path) -> Result<Vec<u8>, ProjectError> {
     std::fs::read(p).map_err(|source| ProjectError::Io {
         path: p.display().to_string(),
         source,
@@ -27,7 +27,7 @@ fn doc_bytes(p: &Path) -> Result<Vec<u8>, ProjectError> {
 
 pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, ProjectError> {
     let root = dir.as_ref();
-    let src = doc_text(&root.join("story.mongscript"))?;
+    let src = read_text(&root.join("story.mongscript"))?;
     let out = mong_script::dsl::load_story_dsl(&src)
         .map_err(|e| ProjectError::Story(format!("story.mongscript: {e}")))?;
 
@@ -38,7 +38,7 @@ pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, P
         return Err(ProjectError::Story(err.message));
     }
 
-    let manifest = Manifest::parse(&doc_text(&root.join("manifest.json"))?)?;
+    let manifest = Manifest::parse(&read_text(&root.join("manifest.json"))?)?;
     for msg in manifest.validate() {
         eprintln!("manifest: {msg}");
     }
@@ -48,7 +48,7 @@ pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, P
     for loc in &out.story.locales {
         let p = root.join(format!("story.strings.{loc}.json"));
         if p.exists() {
-            let t: Table = serde_json::from_str(&doc_text(&p)?)
+            let t: Table = serde_json::from_str(&read_text(&p)?)
                 .map_err(|e| ProjectError::Json(format!("{}: {e}", p.display())))?;
             strings.insert(loc.clone(), t);
         }
@@ -59,7 +59,7 @@ pub fn load_dir(dir: impl AsRef<Path>, locale: Option<&str>) -> Result<Loaded, P
     let mut assets = BTreeMap::new();
     for (id, a) in &manifest.assets {
         let p = root.join("assets").join(&a.path);
-        match doc_bytes(&p) {
+        match read_bytes(&p) {
             Ok(b) => {
                 assets.insert(id.clone(), b);
             }

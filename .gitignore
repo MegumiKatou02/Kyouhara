@@ -4,3 +4,4 @@ Cargo.lock
 *.mongpack
 shells/web/dist/
 shells/web/target
+.zed/

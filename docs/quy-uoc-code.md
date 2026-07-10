@@ -9,6 +9,5 @@
 - Thông điệp lỗi hướng tới người dùng (`Display for *Error`, `eprintln!`):
   tiếng Việt không dấu — tương thích terminal Windows mặc định.
 
-Nợ: `mong-cli` (M1) còn tên hàm tiếng Việt (`doc_bang_chuoi`,
-`nhac_fmt_neu_thieu_key`, `cmd_*` thì đã Anh). Đổi trong một PR cơ học riêng,
-không trộn vào mốc đang làm.
+Nợ này đã trả ở M4 (PR cơ học `dat-ten-lai`), cùng với các tên sai sinh ra
+trong M4.2/M4.3 (`canh_bao`, `dung_thiet_bi`, `audio_moi`, `duong`…).

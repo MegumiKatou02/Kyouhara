@@ -94,12 +94,19 @@ pub struct Loaded {
 }
 
 impl Loaded {
-    /// Nội dung trước, metadata bù vào chỗ trống (key nội dung thắng).
-    pub fn catalog(&self) -> Catalog {
+    /// Chỉ miền nội dung. Lint đọc cái này: key metadata mồ côi ở đây là
+    /// chuyện đương nhiên, không phải lỗi.
+    pub fn content_catalog(&self) -> Catalog {
         let mut c = Catalog::new(self.story.default_locale.clone());
         for (loc, t) in &self.strings {
             c.set_table(loc.clone(), t.clone());
         }
+        c
+    }
+
+    /// Nội dung + metadata. Runtime tra cứu qua cái này; key nội dung thắng.
+    pub fn catalog(&self) -> Catalog {
+        let mut c = self.content_catalog();
         for (loc, t) in &self.manifest.strings {
             c.merge_table(loc.clone(), t.clone());
         }

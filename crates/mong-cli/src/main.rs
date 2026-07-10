@@ -5,7 +5,7 @@
 //! mong-i18n (locale + fallback) thay cờ `--strings` cũ.
 //! `new` / `pack` / `export` thêm ở các mốc sau.
 
-use mong_assets::{read_pack, EntryKind};
+use mong_assets::{EntryKind, Manifest};
 use mong_core::{Story, Vm, VmEvent, VmStatus};
 use mong_i18n::Catalog;
 use mong_script::dsl;
@@ -121,62 +121,49 @@ fn cmd_pack(dir: &str, out: &str) -> Result<ExitCode, Box<dyn Error>> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Cốt truyện đã nạp, kèm những gì frontend DSL biết thêm.
-struct Loaded {
+/// Một file script lẻ đã nạp — đường M1/M2, không manifest, không assets.
+struct ScriptFile {
     story: Story,
-    /// Bảng chuỗi defaultLocale lấy thẳng từ văn bản DSL (rỗng với JSON/pack).
+    /// Bảng chuỗi defaultLocale lấy thẳng từ văn bản DSL (rỗng với JSON).
     default_strings: BTreeMap<String, String>,
-    /// Số key DSL vừa sinh trong bộ nhớ — >0 nghĩa là file nguồn chưa có
-    /// key bền vững, cần chạy `fmt`.
+    /// Số key DSL vừa sinh trong bộ nhớ — >0 nghĩa là file nguồn chưa có key
+    /// bền vững, cần chạy `fmt`.
     generated_keys: usize,
 }
 
-fn load_input(path: &str) -> Result<Loaded, Box<dyn Error>> {
+fn load_script_file(path: &str) -> Result<ScriptFile, Box<dyn Error>> {
     if path.ends_with(".mongscript") {
         let src = fs::read_to_string(path)?;
         let out = dsl::load_story_dsl(&src).map_err(|e| format!("{path}: {e}"))?;
-        return Ok(Loaded {
+        return Ok(ScriptFile {
             story: out.story,
             default_strings: out.strings,
             generated_keys: out.generated_keys,
         });
     }
-    Ok(Loaded {
-        story: parse_story(&fs::read(path)?)?,
+    // JSON dự án. `.mongpack` không tới đây nữa — nó là dự án, đi qua
+    // `mong_project::load_pack` và mang theo cả manifest lẫn bảng chuỗi.
+    Ok(ScriptFile {
+        story: mong_script::load_story_json(&fs::read_to_string(path)?)?,
         default_strings: BTreeMap::new(),
         generated_keys: 0,
     })
 }
 
-/// Nhận cả hai định dạng nhị phân/văn bản: .mongpack (nhận qua magic)
-/// hoặc JSON dự án. (.mongscript đi đường riêng vì cần cả bảng chuỗi.)
-fn parse_story(bytes: &[u8]) -> Result<Story, Box<dyn Error>> {
-    if bytes.starts_with(mong_assets::MAGIC) {
-        let entries = read_pack(&mut &bytes[..])?;
-        let e = entries
-            .into_iter()
-            .find(|e| e.kind == EntryKind::StoryIr)
-            .ok_or("mongpack khong co entry story.ir")?;
-        Ok(serde_json::from_slice(&e.data)?)
-    } else {
-        Ok(mong_script::load_story_json(std::str::from_utf8(bytes)?)?)
-    }
-}
-
 /// Đường sidecar: `mot/duong/ten.mongscript` → `mot/duong/ten.strings.vi.json`.
-fn sidecar_path(input: &str, locale: &str) -> PathBuf {
-    let p = Path::new(input);
-    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(input);
+fn sidecar_path(path: &str, locale: &str) -> PathBuf {
+    let p = Path::new(path);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(path);
     p.with_file_name(format!("{stem}.strings.{locale}.json"))
 }
 
 /// Dựng Catalog: defaultLocale từ DSL (nếu có), mọi locale khai báo trong
 /// Story đọc thêm từ sidecar. Sidecar vắng mặt không phải lỗi — fallback lo.
-fn build_catalog(path: &str, loaded: &Loaded) -> Result<Catalog, Box<dyn Error>> {
-    let story = &loaded.story;
+fn build_catalog(path: &str, file: &ScriptFile) -> Result<Catalog, Box<dyn Error>> {
+    let story = &file.story;
     let mut cat = Catalog::new(story.default_locale.clone());
-    if !loaded.default_strings.is_empty() {
-        cat.set_table(story.default_locale.clone(), loaded.default_strings.clone());
+    if !file.default_strings.is_empty() {
+        cat.set_table(story.default_locale.clone(), file.default_strings.clone());
     }
     let all = std::iter::once(&story.default_locale).chain(story.locales.iter());
     for loc in all {
@@ -193,20 +180,7 @@ fn build_catalog(path: &str, loaded: &Loaded) -> Result<Catalog, Box<dyn Error>>
     Ok(cat)
 }
 
-/// Bảng chuỗi defaultLocale: từ DSL nếu có, không thì đọc sidecar.
-fn doc_bang_chuoi(
-    path: &str,
-    loaded: &Loaded,
-    locale: &str,
-) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    if !loaded.default_strings.is_empty() {
-        return Ok(loaded.default_strings.clone());
-    }
-    let p = sidecar_path(path, locale);
-    Ok(serde_json::from_str(&fs::read_to_string(p)?)?)
-}
-
-fn nhac_fmt_neu_thieu_key(path: &str, generated: usize) {
+fn warn_missing_keys(path: &str, generated: usize) {
     if generated > 0 {
         eprintln!(
             "canh bao: {generated} dong chua co key #~ (dang dung key tam trong bo nho).\n\
@@ -216,40 +190,55 @@ fn nhac_fmt_neu_thieu_key(path: &str, generated: usize) {
 }
 
 fn cmd_lint(path: &str) -> Result<ExitCode, Box<dyn Error>> {
-    let loaded = load_input(path)?;
-    nhac_fmt_neu_thieu_key(path, loaded.generated_keys);
-    let catalog = build_catalog(path, &loaded)?;
+    let input = resolve_input(path)?;
+    warn_missing_keys(path, input.generated_keys);
+    let mut issues = mong_script::validate(&input.story);
 
-    let mut issues = mong_script::validate(&loaded.story);
-    // Luật cần bảng chuỗi (docs/lint-rules.md L022–L024): chỉ chạy khi biết
-    // bảng defaultLocale — với JSON/mongpack không có sidecar thì bỏ qua.
-    let default_loc = &loaded.story.default_locale;
-    if catalog.has_locale(default_loc) {
-        let table = doc_bang_chuoi(path, &loaded, default_loc)?;
-        issues.extend(mong_script::validate_strings(&loaded.story, &table));
+    // Manifest chỉ có ở dự án. Đây là chỗ lẽ ra đã bắt được ba file .ogg
+    // thiếu, thay vì để `pack` từ chối mãi về sau.
+    if let Some(m) = &input.manifest {
+        for msg in m.validate() {
+            issues.push(mong_script::Issue {
+                severity: mong_script::Severity::Warning,
+                node: None,
+                message: format!("manifest: {msg}"),
+            });
+        }
     }
+
+    // Luật cần bảng chuỗi (docs/lint-rules.md L022–L024).
+    let default_loc = &input.story.default_locale;
+    if let Some(table) = input.content.table(default_loc) {
+        issues.extend(mong_script::validate_strings(&input.story, table));
+    }
+
     // L027 — locale khai báo nhưng thiếu bản dịch.
-    for loc in &loaded.story.locales {
-        let thieu = catalog.missing_in(loc);
-        if !thieu.is_empty() {
+    for loc in &input.story.locales {
+        let missing = input.content.missing_in(loc);
+        if !missing.is_empty() {
             issues.push(mong_script::Issue {
                 severity: mong_script::Severity::Warning,
                 node: None,
                 message: format!(
                     "locale '{loc}' thieu {} chuoi (vd: {})",
-                    thieu.len(),
-                    thieu.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                    missing.len(),
+                    missing
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
             });
         }
     }
     // Sidecar defaultLocale lệch với văn bản trong .mongscript → đã cũ.
-    if !loaded.default_strings.is_empty() {
+    if input.manifest.is_none() && path.ends_with(".mongscript") {
         let p = sidecar_path(path, default_loc);
-        let tren_dia: Option<BTreeMap<String, String>> = fs::read_to_string(&p)
+        let on_disk: Option<BTreeMap<String, String>> = fs::read_to_string(&p)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok());
-        if tren_dia.is_some_and(|t| t != loaded.default_strings) {
+        if on_disk.is_some_and(|t| t != input.default_strings) {
             issues.push(mong_script::Issue {
                 severity: mong_script::Severity::Warning,
                 node: None,
@@ -337,9 +326,9 @@ fn cmd_fmt(path: &str, check: bool) -> Result<ExitCode, Box<dyn Error>> {
 }
 
 fn cmd_run(path: &str, locale: Option<&str>) -> Result<(), Box<dyn Error>> {
-    let loaded = load_input(path)?;
-    nhac_fmt_neu_thieu_key(path, loaded.generated_keys);
-    let issues = mong_script::validate(&loaded.story);
+    let input = resolve_input(path)?;
+    warn_missing_keys(path, input.generated_keys);
+    let issues = mong_script::validate(&input.story);
     if issues
         .iter()
         .any(|i| i.severity == mong_script::Severity::Error)
@@ -347,18 +336,24 @@ fn cmd_run(path: &str, locale: Option<&str>) -> Result<(), Box<dyn Error>> {
         return Err("cot truyen co loi lint — chay `mong-cli lint` de xem chi tiet".into());
     }
 
-    let catalog = build_catalog(path, &loaded)?;
-    let story = loaded.story;
+    // `Vm::new` move `story`; tách trước để `catalog`/`manifest` sống tiếp.
+    let Input {
+        story,
+        catalog,
+        manifest,
+        ..
+    } = input;
+
     let locale = match locale {
         Some(l) => {
             let known = l == story.default_locale || story.locales.iter().any(|x| x == l);
             if !known {
-                let mut co = story.default_locale.clone();
+                let mut available = story.default_locale.clone();
                 for x in &story.locales {
-                    co.push_str(", ");
-                    co.push_str(x);
+                    available.push_str(", ");
+                    available.push_str(x);
                 }
-                return Err(format!("locale '{l}' khong co trong truyen (co: {co})").into());
+                return Err(format!("locale '{l}' khong co trong truyen (co: {available})").into());
             }
             l.to_string()
         }
@@ -373,7 +368,7 @@ fn cmd_run(path: &str, locale: Option<&str>) -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     loop {
         for e in &events {
-            render(e, &catalog, &locale);
+            render(e, manifest.as_ref(), &catalog, &locale);
         }
         // Core không tự hẹn giờ (spec-ir.md): text runner advance ngay sau Wait.
         let auto_wait = matches!(events.last(), Some(VmEvent::Wait { .. }));
@@ -454,11 +449,11 @@ fn prompt_choice(
     }
 }
 
-fn render(ev: &VmEvent, c: &Catalog, loc: &str) {
+fn render(ev: &VmEvent, manifest: Option<&Manifest>, c: &Catalog, loc: &str) {
     let t = |key: &str| c.text_or_key(loc, key).to_string();
     match ev {
         VmEvent::Say { speaker, text, .. } => match speaker {
-            Some(sp) => println!("{sp}: {}", t(text)),
+            Some(sp) => println!("{}: {}", speaker_name(manifest, c, loc, sp), t(text)),
             None => println!("* {}", t(text)),
         },
         VmEvent::Choices { arms } => {
@@ -494,26 +489,87 @@ fn render(ev: &VmEvent, c: &Catalog, loc: &str) {
     }
 }
 
+/// Đầu vào đã phân giải — cùng hình dạng cho cả dự án lẫn file lẻ.
+struct Input {
+    story: Story,
+    /// Nội dung + metadata — dùng để **hiển thị**.
+    catalog: Catalog,
+    /// Chỉ miền nội dung — dùng để **lint**. Với file lẻ, hai cái trùng nhau.
+    content: Catalog,
+    /// `None` với file lẻ: không manifest thì tên nhân vật hiển thị là chính
+    /// id, và các luật lint về manifest không chạy.
+    manifest: Option<Manifest>,
+    /// Chỉ có nghĩa với `.mongscript`: dùng để phát hiện sidecar đã cũ.
+    default_strings: BTreeMap<String, String>,
+    generated_keys: usize,
+}
+
+fn resolve_input(path: &str) -> Result<Input, Box<dyn Error>> {
+    let from_project = |l: mong_project::Loaded| Input {
+        catalog: l.catalog(),
+        content: l.content_catalog(),
+        story: l.story,
+        manifest: Some(l.manifest),
+        default_strings: BTreeMap::new(),
+        generated_keys: 0,
+    };
+    if Path::new(path).is_dir() {
+        return Ok(from_project(mong_project::load_dir(path, None)?));
+    }
+    if path.ends_with(".mongpack") {
+        return Ok(from_project(mong_project::load_pack(
+            &fs::read(path)?,
+            None,
+        )?));
+    }
+    let file = load_script_file(path)?;
+    let catalog = build_catalog(path, &file)?;
+    Ok(Input {
+        story: file.story,
+        content: catalog.clone(),
+        catalog,
+        manifest: None,
+        default_strings: file.default_strings,
+        generated_keys: file.generated_keys,
+    })
+}
+
+/// Tên hiển thị của người nói. Không manifest, hoặc id lạ, thì trả chính id —
+/// thà thấy `minh` còn hơn thấy khoảng trắng.
+fn speaker_name<'a>(
+    manifest: Option<&'a Manifest>,
+    catalog: &'a Catalog,
+    locale: &str,
+    id: &'a str,
+) -> &'a str {
+    manifest
+        .and_then(|m| m.characters.get(id))
+        .map(|c| catalog.text_or_key(locale, &c.name))
+        .unwrap_or(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mong_assets::{write_pack, PackEntry};
-
-    const DEMO: &str = include_str!("../../../crates/mong-script/tests/data/demo-story.json");
-
+    /// Nợ M3 #5 / M4 #3: dự án thì hiện tên nhân vật, không hiện id.
     #[test]
-    fn parse_story_nhan_ca_json_lan_mongpack() {
-        let s1 = parse_story(DEMO.as_bytes()).unwrap();
-        let ir = serde_json::to_vec(&s1).unwrap();
-        let entries = vec![PackEntry {
-            name: "story.ir".into(),
-            kind: EntryKind::StoryIr,
-            data: ir,
-        }];
-        let mut buf = Vec::new();
-        write_pack(&mut buf, &entries).unwrap();
-        let s2 = parse_story(&buf).unwrap();
-        assert_eq!(s1, s2);
+    fn du_an_hien_ten_nhan_vat() {
+        let input = resolve_input("../../examples/quan-ca-phe").unwrap();
+        let m = input.manifest.as_ref();
+        assert_eq!(speaker_name(m, &input.catalog, "vi", "minh"), "Minh");
+        assert_eq!(
+            speaker_name(m, &input.catalog, "vi", "khong_co"),
+            "khong_co"
+        );
+    }
+
+    /// File lẻ không có manifest — người nói hiện bằng id, đúng thiết kế.
+    #[test]
+    fn file_le_hien_id() {
+        let p = "../mong-script/tests/data/demo-story.mongscript";
+        let input = resolve_input(p).unwrap();
+        assert!(input.manifest.is_none());
+        assert_eq!(speaker_name(None, &input.catalog, "vi", "lan"), "lan");
     }
 
     #[test]
@@ -526,5 +582,15 @@ mod tests {
             sidecar_path("demo.mongscript", "vi"),
             PathBuf::from("demo.strings.vi.json")
         );
+    }
+
+    /// Key metadata (`char.*`, `scene.*`) không phải key nội dung. Lint đọc
+    /// bảng đã hợp nhất thì báo mồ côi oan — hợp nhất là việc của lúc tra cứu.
+    #[test]
+    fn lint_du_an_khong_bao_key_metadata_mo_coi() {
+        let input = resolve_input("../../examples/quan-ca-phe").unwrap();
+        let table = input.content.table("vi").unwrap();
+        assert!(!table.contains_key("char.lan"));
+        assert!(input.catalog.table("vi").unwrap().contains_key("char.lan"));
     }
 }

@@ -5,20 +5,20 @@
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let Some(duong) = args.next() else {
+    let Some(path) = args.next() else {
         eprintln!("cach dung: mong-desktop <thu_muc_du_an | file.mongpack> [locale]");
         std::process::exit(2);
     };
     let locale = args.next();
 
     // Nhận cả hai: thư mục (dev) và gói (thứ người chơi nhận).
-    let loaded = if std::path::Path::new(&duong).is_dir() {
-        mong_project::load_dir(&duong, locale.as_deref())
+    let loaded = if std::path::Path::new(&path).is_dir() {
+        mong_project::load_dir(&path, locale.as_deref())
     } else {
-        match std::fs::read(&duong) {
+        match std::fs::read(&path) {
             Ok(b) => mong_project::load_pack(&b, locale.as_deref()),
             Err(e) => {
-                eprintln!("loi: {duong}: {e}");
+                eprintln!("loi: {path}: {e}");
                 std::process::exit(1);
             }
         }
