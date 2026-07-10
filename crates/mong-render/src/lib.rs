@@ -407,7 +407,7 @@ impl Renderer {
                 rect[1] += offset.1;
                 Some((
                     Instance {
-                        rect: self.rect(s.fit, t.size),
+                        rect,
                         tint: s.tint,
                         uv: s.uv,
                         mask: if s.mask { 1.0 } else { 0.0 },

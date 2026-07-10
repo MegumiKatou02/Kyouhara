@@ -1,6 +1,8 @@
 # Demo "Quán cà phê lúc hoàng hôn" — cùng cốt truyện với demo-story.json,
 # viết bằng MộngScript (docs/spec-mongscript.md).
 
+@var ten = "Minh"
+
 @story Quán cà phê lúc hoàng hôn
 @locale vi en
 @var thien_cam = 0
@@ -13,6 +15,7 @@
   scene quan_ca_phe
   bgm nhac_quan
   sfx chuong_cua
+  ext rung {"px": 40, "ms": 600}
   * Nắng chiều đổ nghiêng qua ô cửa kính quán cà phê.  #~ mo_dau.l1
   lan (thuong, left): Ơ… Minh? Lâu lắm rồi mới gặp cậu.  #~ mo_dau.l2
   > Cười và chào Lan trước -> bat_chuyen { thien_cam += 1 }  #~ mo_dau.c1
@@ -22,8 +25,9 @@
 @title Bắt chuyện
 @scene quan_ca_phe
 
+  ext rung {"px": 40, "ms": 600}
   minh (cuoi, right): Lan đấy à? Tớ cứ tưởng nhìn nhầm.  #~ bat_chuyen.l1
-  lan (vui, left): Cậu vẫn hay ngồi đúng góc này như hồi đó nhỉ.  #~ bat_chuyen.l2
+  lan (vui, left): Cậu vẫn hay ngồi đúng góc này như hồi đó nhỉ, {ten}.  #~ bat_chuyen.l2
   jump loi_moi
 
 @node lang_tranh

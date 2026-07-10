@@ -38,7 +38,8 @@
     "nhac_quan": { "path": "audio/nhac_quan.wav", "kind": "audio" },
     "nhac_hoang_hon": { "path": "audio/nhac_hoang_hon.wav", "kind": "audio" },
     "chuong_cua": { "path": "audio/chuong_cua.wav", "kind": "audio" },
-    "font_vi": { "path": "fonts/BeVietnamPro-Regular.ttf", "kind": "font" }
+    "font_vi": { "path": "fonts/BeVietnamPro-Regular.ttf", "kind": "font" },
+    "go_phim": { "path": "audio/go_phim.wav", "kind": "audio" }
   },
   "fonts": { "vi": ["font_vi"], "en": ["font_vi"] },
   "strings": {

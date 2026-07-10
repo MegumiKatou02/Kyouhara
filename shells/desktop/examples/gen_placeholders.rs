@@ -117,6 +117,7 @@ fn main() {
     wav(&format!("{d}/audio/nhac_quan.wav"), 2.0, 220.0, 0.05);
     wav(&format!("{d}/audio/nhac_hoang_hon.wav"), 2.0, 165.0, 0.05);
     wav(&format!("{d}/audio/chuong_cua.wav"), 0.35, 880.0, 0.25);
+    wav(&format!("{d}/audio/go_phim.wav"), 0.03, 1400.0, 0.12);
 
     println!("\nCon thieu:");
     println!("  {d}/fonts/BeVietnamPro-Regular.ttf  (chep tu crates/mong-render/tests/fonts/)");
