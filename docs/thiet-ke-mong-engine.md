@@ -96,6 +96,8 @@ DSL: `mong-cli fmt` quản miền nội dung và không bao giờ đụng manife
 bảng hợp nhất lúc tra cứu qua `Catalog::merge_table`; key nội dung thắng khi
 trùng, và lint L022 bắt trùng từ lúc soạn.
 
+Quy tắc tương thích chưa hiện thực; xem mongpack-entries.md §5.1.
+
 ## 5. Máy ảo cốt truyện (mong-core)
 
 Trái tim của engine là một máy ảo nhỏ chạy tập lệnh trung gian (IR). Cả editor trực quan lẫn DSL text đều biên dịch về IR này — nhờ đó tranh luận "viết bằng form hay bằng text" (mục 6 nhóm 2 của prototype) biến mất: hai mặt của cùng một đồng xu.

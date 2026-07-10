@@ -1,17 +1,6 @@
-//! mong-project — nạp dự án thành [`Loaded`], từ thư mục (dev) hoặc từ gói
-//! `.mongpack` (phân phối). Nơi duy nhất biết bố cục dự án; CLI, shell
-//! desktop, shell web và editor dùng chung.
+//! mong-project
 //!
-//! Ranh giới quan trọng: [`load_pack`] không phụ thuộc `mong-script`. Web chỉ
-//! bật đường pack, nhờ vậy parser không vào bundle wasm.
-//!
-//! Bố cục entry trong gói (tên là hợp đồng, đổi = tăng FORMAT_VERSION):
-//! ```text
-//! manifest.json          Meta
-//! story.ir               StoryIr    (JSON của Story)
-//! strings/<locale>.json  Strings    (miền nội dung, KHÔNG gồm manifest.strings)
-//! assets/<asset_id>      Image|Audio|Font   (tên = id, không phải path)
-//! ```
+//! Xem cấu trúc chi tiết của các entries trong file pack tại: [docs/mongpack-entries.md](../../docs/mongpack-entries.md)
 
 #[cfg(feature = "fs")]
 mod dir;
@@ -207,7 +196,7 @@ pub fn load_pack(bytes: &[u8], locale: Option<&str>) -> Result<Loaded, ProjectEr
                     .to_string();
                 assets.insert(id, e.data);
             }
-            // Meta lạ và Plugin (M5): bỏ qua, gói mới vẫn chạy trên runtime cũ.
+            // Entry lạ: bỏ qua. Xem mongpack-entries.md §5.2 — read_pack chưa cho phép kind lạ.
             EntryKind::Meta | EntryKind::Plugin => {}
         }
     }
