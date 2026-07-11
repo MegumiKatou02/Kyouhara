@@ -75,6 +75,9 @@ jobs:
 
   safari:
     runs-on: macos-latest
+    # Nợ 0 (m4-ket-thuc): Tạm tắt do GitHub Actions không hỗ trợ tương tác safaridriver headless ổn định.
+    # Chuyển sang checklist kiểm chứng thủ công ghi trong docs để không đốt phút CI và không báo đỏ bậy.
+    if: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

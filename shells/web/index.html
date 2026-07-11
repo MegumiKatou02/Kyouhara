@@ -7,47 +7,29 @@
   #mong { display: block; width: 100%; height: 100%; touch-action: none; }
 </style>
 <canvas id="mong"></canvas>
-
-<!-- Script thường: chạy NGAY, không chờ ES module import. Đặt log + bẫy
-     lỗi ở đây để bắt được cả lỗi nạp module wasm-bindgen bên dưới. -->
-<script>
-  window.__mong_log = [];
-  window.__mong_stage = "html-parsed";
-  for (const k of ["log", "warn", "error"]) {
-    const orig = console[k];
-    console[k] = (...a) => {
-      window.__mong_log.push(k + ": " + a.map(String).join(" "));
-      orig.apply(console, a);
-    };
-  }
-  addEventListener("error", (e) => {
-    window.__mong_error = window.__mong_error ||
-      String((e.error && e.error.stack) || e.message || e);
-    window.__mong_log.push("error-event: " + window.__mong_error);
-  });
-  addEventListener("unhandledrejection", (e) => {
-    window.__mong_error = window.__mong_error || String(e.reason);
-    window.__mong_log.push("rejection: " + String(e.reason));
-  });
-</script>
-
 <script type="module">
-  window.__mong_stage = "module-entered";
-  console.log("module bat dau chay");
+  import init, { start } from "./dist/mong_web.js";
+
+  // winit không tự chỉnh canvas. Đặt kích thước pixel thật (CSS × dpr);
+  // ResizeObserver của winit thấy và phát `Resized`.
+  const canvas = document.getElementById("mong");
+  const fit = () => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
+  };
+  fit();
+  addEventListener("resize", fit);
+
   try {
-    const { default: init, start } = await import("./dist/mong_web.js");
-    console.log("import mong_web.js OK");
     await init();
-    console.log("init() OK");
     const res = await fetch("../../quan.mongpack");
     if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
-    console.log("fetch pack OK");
-    console.log("truoc start()");
+    // __mong_ready do Rust đặt trong frame() đầu tiên (shells/common/state.rs).
     start(new Uint8Array(await res.arrayBuffer()), null);
-    console.log("sau start()");
   } catch (e) {
     document.title = "HONG";
-    window.__mong_error = String((e && e.stack) || e);
-    console.error("catch:", window.__mong_error);
+    console.error(e);
+    throw e;
   }
 </script>

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+#
+# chưa nối vào CI — treo ở tầng WebDriver-không-đọc-được-JS, xem m5-ket-thuc.md
 """Safari smoke test: mo trang demo, cho __mong_ready do Rust dat trong
 frame() dau tien (xem shells/common/state.rs). Thoat 0 = Safari ve duoc
 frame that; thoat 1 kem __mong_error neu co."""

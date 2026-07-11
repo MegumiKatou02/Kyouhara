@@ -60,9 +60,6 @@ impl State {
             .create_surface(window.clone())
             .expect("khong tao duoc surface");
 
-        #[cfg(target_arch = "wasm32")]
-        push_log("state: truoc request_adapter");
-
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
@@ -71,9 +68,6 @@ impl State {
             })
             .await
             .expect("khong tim thay GPU adapter (Safari/WebGL2)");
-
-        #[cfg(target_arch = "wasm32")]
-        push_log("state: sau request_adapter — co adapter");
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps
@@ -376,21 +370,5 @@ impl State {
             origin,
             color,
         )
-    }
-}
-
-/// Đẩy một dòng vào window.__mong_log để safari_check.py kéo ra được.
-/// console::log thường của web-sys KHÔNG vào mảng shim của index.html nên
-/// CI đọc không thấy — phải ghi thẳng vào mảng.
-#[cfg(target_arch = "wasm32")]
-fn push_log(msg: &str) {
-    use wasm_bindgen::JsValue;
-    if let Some(w) = web_sys::window() {
-        let arr = js_sys::Reflect::get(&w, &"__mong_log".into())
-            .ok()
-            .filter(|v| !v.is_undefined());
-        if let Some(arr) = arr {
-            let _ = js_sys::Array::from(&arr).push(&JsValue::from_str(msg));
-        }
     }
 }
