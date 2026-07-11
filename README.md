@@ -1,6 +1,4 @@
-# Mộng Engine
-
-Engine visual novel viết bằng Rust — web / desktop / mobile từ một codebase.
+Engine viết bằng Rust — web / desktop / mobile từ một codebase.
 Xem `docs/thiet-ke-mong-engine.md` (tài liệu thiết kế) và `docs/spec-ir.md` (spec tập lệnh IR).
 
 Trạng thái: **M0** — workspace skeleton, IR + máy ảo tối thiểu (`mong-core`),
