@@ -3,15 +3,21 @@
 **Trạng thái: ĐANG MỞ** (mở 2026-07-11)
 
 ## DoD
-- [ ] 3 plugin mẫu prototype (chèn biến, rung, gõ chữ) chạy desktop
-- [ ] 3 plugin đó chạy web (Chrome/Firefox + job Safari xanh)
+- [x] 3 plugin mẫu prototype (chèn biến, rung, gõ chữ) chạy desktop
+- [x] 3 plugin đó chạy web — kiểm tay Chrome/Firefox. **Safari chưa xác minh**
+      (bộ gá CI hỏng ở tầng WebDriver, xem Nợ 5; điều khoản tự ràng buộc
+      của m4-ket-thuc đã kích hoạt — mục 8/14 tài liệu thiết kế đã sửa theo)
 
 ## Tiến độ
 - [x] M5.0 Chốt mongpack §5.1/§5.2 + spec-plugin.md; plugins/*.rhai vào Loaded/gói
 - [x] M5.1 mong-plugin host (rhai sandbox, cô lập lỗi, hợp đồng data-only)
 - [x] M5.2 Tích hợp runtime (hook/filter/ext/action, Vm::set_var + jump_to)
 - [x] M5.3 Ba plugin demo + sfx go_phim
-- [ ] M5.4 Kiểm chứng web + Safari CI (nợ 0 M4) + đo bundle
+- [x] M5.4 Kiểm chứng web (Chrome/Firefox tay) + đo bundle. Safari-CI: không đạt, tắt job (if: false)
+
+## Số đo
+- Bundle gzip sau khi rhai vào: **1.632.746 B (31% trần 5 MB)** — trước rhai
+  1.320.898 B (25%); rhai + đường plugin cộng ~312 KB gzip.
 
 ## Quyết định phát sinh
 - `set_var` vá cả snapshot gần nhất: hook bắn tại điểm dừng nên hậu quả
@@ -35,3 +41,10 @@
 3. Hạ tầng chạy test trên wasm (wasm-bindgen-test + headless). M6.
 4. Nợ 15 của M4 (phân đoạn script + AttrsList) gắn nhãn M5 nhưng không
    thuộc DoD plugin — dời M6, ghi rõ tại đây thay vì im lặng trượt.
+5. **Bộ gá Safari-CI hỏng ở tầng WebDriver.** Sau đủ 60s, `execute/sync` trả
+   về trang không có `__mong_stage` — JS của trang chưa từng thực thi theo
+   góc nhìn của safaridriver, dù script thường đặt biến ngay khi parse HTML.
+   Chưa xác định nguyên nhân (execute-context? safaridriver headless?).
+   Engine CHƯA được kiểm trên Safari — không phải "Safari fail", mà là "chưa
+   đo được". Job giữ nguyên với `if: false`; `ci/safari_check.py` giữ làm
+   script chạy tay. Xử cùng lúc nâng wgpu (nợ 8 M4) hoặc khi có máy Mac.

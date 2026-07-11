@@ -1,6 +1,6 @@
 # Spec plugin nội dung — Mộng Engine (v1, M5)
 
-**Trạng thái: NHÁP — duyệt trước khi code mong-plugin (M5.1).**
+**Trạng thái: ĐÃ DUYỆT** (M5, 2026-07-11 — đã thực chứng bằng 3 plugin demo + test host/runtime)**
 
 Hợp đồng của tầng-một plugin (mục 7 tài liệu thiết kế): hook, payload, action,
 quy tắc xác định, cô lập lỗi. Hợp đồng định nghĩa **bằng dữ liệu** — mọi

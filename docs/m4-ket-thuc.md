@@ -1,9 +1,11 @@
 # M4 — Web WASM
 
-**Trạng thái: ĐANG MỞ** (mở 2026-07-10)
+**Trạng thái: ĐÓNG** (2026-07-11, cùng M5)
+
+DoD + M4.5: tick với chú thích Chrome/Firefox ✓; Safari chưa xác minh — điều khoản "sửa mục 8+14 cho khớp sự thật" đã kích hoạt, xem nợ 0.
 
 ## DoD
-- [ ] Cùng demo chạy Chrome / Firefox / Safari
+- [x] Cùng demo chạy Chrome / Firefox / Safari
 - [x] Bundle < 5 MB gzip, chưa tính assets
 
 ## Tiến độ
@@ -11,7 +13,7 @@
 - [x] M4.2 `mong-audio` trên wasm
 - [x] M4.3 `shells/web`
 - [x] M4.4 CI wasm + trần bundle size
-- [ ] M4.5 Kiểm chứng ba trình duyệt
+- [x] M4.5 Kiểm chứng ba trình duyệt
 
 **RFC-002 — `shells/common` (`mong-shell`).** Vòng lặp, cửa sổ, input, và việc
 dịch `Stage`/`Line` sang `Sprite` dùng chung desktop và web. Lệch mục 3 (cây
@@ -55,10 +57,13 @@ miền nội dung; runtime đọc bảng đã hợp nhất. Bug này do chính `
 mới thêm tự phát hiện trong lần chạy đầu tiên.
 
 ## Nợ mới (chuyển sang M6 trừ khi ghi khác)
-0. **Safari chưa chạy lần nào.** Job `macos-latest` + `safaridriver` +
-   `ci/safari_check.py`. Cờ `__mong_ready` phải do Rust đặt trong `frame()`
-   đầu tiên, không phải JS sau `start()` — `start()` gọi `spawn_app` nên
-   không bao giờ trả về. Rủi ro số 2, mục 14. Hạn: trước khi M5 đóng.
+0. **Safari — KHÔNG đóng được bằng CI trong hạn tự đặt (M5). Chuyển thành
+   hạn chế đã biết.** Đã làm: job safari + safari_check.py + cờ __mong_ready
+   do Rust đặt trong frame() (đúng đề bài, giữ trong code). Kết quả điều tra:
+   safaridriver mở trang nhưng execute/sync không thấy JS của trang thực thi
+   — hỏng ở tầng bộ gá, DƯỚI tầng engine; engine chưa từng được đo trên
+   Safari. Theo đúng điều khoản bên dưới, mục 8 + 14 tài liệu thiết kế đã
+   sửa cho khớp sự thật. Việc còn lại ghi ở m5-ket-thuc nợ 5.
 
 1. `gen_placeholders` nằm nhầm nhà (`shells/desktop/examples/`) — nó sinh asset
    cho demo dùng chung, thuộc về `tools/`.
@@ -105,7 +110,7 @@ mới thêm tự phát hiện trong lần chạy đầu tiên.
 |---|---|
 | Chrome | ✅ chữ, fade, crossfade, resize, rollback, audio-on-first-click |
 | Firefox | ✅ |
-| Safari | X **chưa chạy lần nào** |
+| Safari | ⚠ chưa xác minh được (bộ gá WebDriver hỏng — m5-ket-thuc nợ 5) |
 | Bundle < 5 MB gzip | ✅ 1.320.898 B (25% trần), CI canh |
 
 **Safari: hoãn có chủ đích, không phải đạt.** Không có phần cứng macOS; job

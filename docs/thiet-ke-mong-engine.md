@@ -158,6 +158,11 @@ Ngôn ngữ nhúng cho tầng một **đã chốt: `rhai`** cho v1. Ba lý do: r
 
 Sửa: "WebGL2 là sàn, WebGPU khi có" → hiện web luôn GL
 
+⚠ Ghi chú thực tế (M5, 2026-07-11): WebGL2 đã kiểm chứng trên Chrome và
+Firefox; **Safari chưa được kiểm chứng trên đường code hiện tại** — bộ gá
+test tự động hỏng ở tầng WebDriver trước khi chạm tới engine (m5-ket-thuc
+nợ 5). Cho tới khi đo được, hỗ trợ Safari là mục tiêu, không phải cam kết.
+
 Chữ là phần khó nhất và là nơi Ren'Py hay lộ khuyết điểm với tiếng Việt: dùng `cosmic-text` để shaping đúng dấu tiếng Việt, CJK, và RTL; font fallback khai báo theo locale trong `mong-i18n`; typewriter chạy theo grapheme cluster chứ không theo byte (chữ "ế" không bao giờ hiện nửa chừng thành "e"). Sprite nhân vật ghép layer (thân + mặt + trang phục) như đã ghi ở mục 4, giảm khối lượng vẽ cho artist theo cấp số nhân.
 
 ## 9. Âm thanh
@@ -214,7 +219,7 @@ Mỗi milestone có "định nghĩa hoàn thành" (DoD) kiểm chứng được;
 
 ## 14. Rủi ro chính và cách giảm
 
-Rủi ro lớn nhất là **phạm vi phình** — engine là hố đen thời gian; phòng bằng DoD cứng cho từng mốc và danh sách "không làm ở v1" ở mục 1. Thứ hai là **WebGPU trên Safari** chưa phủ hết — phòng bằng fallback WebGL2 bắt buộc từ M3, test Safari trong CI của M4. Thứ ba là **scripting trên WASM** — phòng bằng quyết định rhai-trước và API host trung lập. Thứ tư là **text shaping tiếng Việt/CJK** nhiều ca hiểm — phòng bằng bộ test chuỗi hiểm (dấu chồng, emoji, RTL trộn) viết ngay ở M3, và text-mode runner của M1 giúp mọi bug chữ chỉ nằm ở tầng render, không lẫn vào logic.
+Rủi ro lớn nhất là **phạm vi phình** — engine là hố đen thời gian; phòng bằng DoD cứng cho từng mốc và danh sách "không làm ở v1" ở mục 1. Thứ hai là **WebGPU trên Safari** chưa phủ hết — phòng bằng fallback WebGL2 bắt buộc từ M3, test Safari trong CI của M4. Thứ ba là **scripting trên WASM** — phòng bằng quyết định rhai-trước và API host trung lập. Thứ tư là **text shaping tiếng Việt/CJK** nhiều ca hiểm — phòng bằng bộ test chuỗi hiểm (dấu chồng, emoji, RTL trộn) viết ngay ở M3, và text-mode runner của M1 giúp mọi bug chữ chỉ nằm ở tầng render, không lẫn vào logic. (kế hoạch test Safari-CI không thực hiện được trong M4–M5 — xem m5-ket-thuc nợ 5; rủi ro này hiện KHÔNG có lưới đo tự động)
 
 ---
 
