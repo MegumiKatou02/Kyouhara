@@ -42,8 +42,12 @@ def main():
                 print(f"HONG: {err}")
                 return 1
             time.sleep(1)
-        print(f"HONG: qua {TIMEOUT_S}s khong thay __mong_ready")
-        print("__mong_error =", js(sid, "return window.__mong_error || null;"))
+            print(f"HONG: qua {TIMEOUT_S}s khong thay __mong_ready")
+            print("__mong_error =", js(sid, "return window.__mong_error || null;"))
+            print("__mong_stage =", js(sid, "return window.__mong_stage || '(khong co — module/script chua chay)';"))
+            logs = js(sid, "return (window.__mong_log || []).join('\\n');")
+            print("--- console (" + str(len(logs)) + " ky tu) ---")
+            print(logs if logs else "(rong)")
         # Kéo mọi thứ đã log ra để biết frame() kẹt ở đâu (adapter? panic?).
         logs = js(sid, """
             return (window.__mong_log || []).join('\\n');

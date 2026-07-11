@@ -7,10 +7,12 @@
   #mong { display: block; width: 100%; height: 100%; touch-action: none; }
 </style>
 <canvas id="mong"></canvas>
-<script type="module">
-  import init, { start } from "./dist/mong_web.js";
 
+<!-- Script thường: chạy NGAY, không chờ ES module import. Đặt log + bẫy
+     lỗi ở đây để bắt được cả lỗi nạp module wasm-bindgen bên dưới. -->
+<script>
   window.__mong_log = [];
+  window.__mong_stage = "html-parsed";
   for (const k of ["log", "warn", "error"]) {
     const orig = console[k];
     console[k] = (...a) => {
@@ -18,41 +20,34 @@
       orig.apply(console, a);
     };
   }
-
-  // Panic Rust sau khi start() trả về chạy ở task spawn_local khác — khối
-  // catch bên dưới (chỉ bọc lời gọi đồng bộ) không thấy. Bắt toàn cục để
-  // CI đọc được nguyên nhân thay vì chỉ thấy "khong thay __mong_ready".
   addEventListener("error", (e) => {
-    window.__mong_error = window.__mong_error || String(e.message || e.error || e);
+    window.__mong_error = window.__mong_error ||
+      String((e.error && e.error.stack) || e.message || e);
+    window.__mong_log.push("error-event: " + window.__mong_error);
   });
   addEventListener("unhandledrejection", (e) => {
     window.__mong_error = window.__mong_error || String(e.reason);
+    window.__mong_log.push("rejection: " + String(e.reason));
   });
+</script>
 
-  // winit không tự chỉnh canvas. Đặt kích thước pixel thật (CSS × dpr);
-  // ResizeObserver của winit thấy và phát `Resized`.
-  const canvas = document.getElementById("mong");
-  const fit = () => {
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(canvas.clientWidth * dpr);
-    canvas.height = Math.round(canvas.clientHeight * dpr);
-  };
-  fit();
-  addEventListener("resize", fit);
-
+<script type="module">
+  window.__mong_stage = "module-entered";
+  console.log("module bat dau chay");
   try {
-      await init();
-      const res = await fetch("../../quan.mongpack");
-      if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
-      console.log("truoc start()");
-      start(new Uint8Array(await res.arrayBuffer()), null);
-      // KHÔNG đặt __mong_ready ở đây — cờ do Rust đặt trong frame() đầu tiên.
-      // Nếu Safari tới được dòng dưới, start() đã trả về (khác Chrome?).
-      console.log("sau start() — start da tra ve");
-    } catch (e) {
-      document.title = "HONG";
-      window.__mong_error = String(e);
-      console.error("catch:", e);
-      throw e;
-    }
+    const { default: init, start } = await import("./dist/mong_web.js");
+    console.log("import mong_web.js OK");
+    await init();
+    console.log("init() OK");
+    const res = await fetch("../../quan.mongpack");
+    if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
+    console.log("fetch pack OK");
+    console.log("truoc start()");
+    start(new Uint8Array(await res.arrayBuffer()), null);
+    console.log("sau start()");
+  } catch (e) {
+    document.title = "HONG";
+    window.__mong_error = String((e && e.stack) || e);
+    console.error("catch:", window.__mong_error);
+  }
 </script>
