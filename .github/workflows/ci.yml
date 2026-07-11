@@ -91,11 +91,21 @@ jobs:
             --target web --out-dir shells/web/dist
       - name: serve + safaridriver
         run: |
-          python3 -m http.server 8080 &
           sudo safaridriver --enable
           safaridriver --port 4444 &
-          sleep 2
+          python3 -m http.server 8080 &
+          SERVER_PID=$!
+          # Chờ server thật sự nhận kết nối trước khi giao cho Safari —
+          # `&` không đảm bảo cổng đã mở, và step trước tách shell nên server
+          # nền của nó đã chết (đây là nguyên nhân timeout POST /url).
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8080/shells/web/index.html >/dev/null && break
+            sleep 0.5
+          done
           python3 ci/safari_check.py
+          RC=$?
+          kill $SERVER_PID 2>/dev/null || true
+          exit $RC
   lint:
     runs-on: ubuntu-latest
     steps:
