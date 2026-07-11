@@ -25,4 +25,5 @@ wgpu = { version = "22", features = ["webgl"] }
 mong-audio = { path = "../../crates/mong-audio", features = ["web-backend"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Document", "Window", "HtmlCanvasElement"] }

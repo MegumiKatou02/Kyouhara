@@ -45,6 +45,9 @@ pub(crate) struct State {
     shaped: HashMap<String, ShapedLine>,
     last: Instant,
     missing: HashSet<String>,
+    /// Web: đã báo `__mong_ready` cho CI chưa (đặt sau frame đầu tiên).
+    #[cfg(target_arch = "wasm32")]
+    ready_flagged: bool,
 }
 
 impl State {
@@ -154,6 +157,8 @@ impl State {
             shaped: HashMap::new(),
             last: Instant::now(),
             missing: HashSet::new(),
+            #[cfg(target_arch = "wasm32")]
+            ready_flagged: false,
         }
     }
 
@@ -215,6 +220,17 @@ impl State {
         self.renderer
             .draw(&view, vp, &sprites, self.rt.shake_offset());
         frame.present();
+
+        // Nợ 0 (m4-ket-thuc): cờ CI phải chứng minh "renderer đã vẽ được một
+        // frame thật", không phải "wasm nạp xong" — request_adapter fail trên
+        // Safari xảy ra SAU khi start() trả về, JS đặt cờ sẽ báo xanh giả.
+        #[cfg(target_arch = "wasm32")]
+        if !self.ready_flagged {
+            self.ready_flagged = true;
+            if let Some(w) = web_sys::window() {
+                let _ = js_sys::Reflect::set(&w, &"__mong_ready".into(), &true.into());
+            }
+        }
 
         if self.rt.status() == VmStatus::Ended {
             self.window.set_title("Mộng Engine — hết truyện");

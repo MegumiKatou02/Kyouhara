@@ -46,6 +46,8 @@ jobs:
       # Ranh giới: đường pack không được kéo mong-script/pest vào wasm
       - run: cargo build -p mong-core -p mong-script -p mong-assets --target wasm32-unknown-unknown
       - run: cargo build -p mong-project --no-default-features --target wasm32-unknown-unknown
+      # M5: rhai + đường plugin phải compile được cho wasm (DoD "chạy cả web")
+      - run: cargo build -p mong-plugin -p mong-runtime --target wasm32-unknown-unknown
       # Shell web là workspace riêng — lint riêng
       - run: cargo clippy --manifest-path shells/web/Cargo.toml -- -D warnings
 
