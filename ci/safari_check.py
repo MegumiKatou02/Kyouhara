@@ -40,25 +40,25 @@ def main():
             err = js(sid, "return window.__mong_error || null;")
             if err:
                 print(f"HONG: {err}")
+                _dump(sid)          # in cả stage + console khi có lỗi
                 return 1
             time.sleep(1)
-            print(f"HONG: qua {TIMEOUT_S}s khong thay __mong_ready")
-            print("__mong_error =", js(sid, "return window.__mong_error || null;"))
-            print("__mong_stage =", js(sid, "return window.__mong_stage || '(khong co — module/script chua chay)';"))
-            logs = js(sid, "return (window.__mong_log || []).join('\\n');")
-            print("--- console (" + str(len(logs)) + " ky tu) ---")
-            print(logs if logs else "(rong)")
-        # Kéo mọi thứ đã log ra để biết frame() kẹt ở đâu (adapter? panic?).
-        logs = js(sid, """
-            return (window.__mong_log || []).join('\\n');
-        """)
-        if logs:
-            print("--- console ---")
-            print(logs)
+
+        # Chỉ tới đây khi ĐÃ hết deadline — giờ mới in chẩn đoán, MỘT lần.
+        print(f"HONG: qua {TIMEOUT_S}s khong thay __mong_ready")
+        _dump(sid)
         return 1
     finally:
         call("DELETE", f"/session/{sid}")
 
+
+def _dump(sid):
+    print("__mong_error =", js(sid, "return window.__mong_error || null;"))
+    print("__mong_stage =", js(sid,
+        "return window.__mong_stage || '(khong co)';"))
+    logs = js(sid, "return (window.__mong_log || []).join('\\n');")
+    print(f"--- console ({len(logs)} ky tu) ---")
+    print(logs if logs else "(rong)")
 
 if __name__ == "__main__":
     sys.exit(main())
