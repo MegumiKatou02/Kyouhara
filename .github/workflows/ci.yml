@@ -91,21 +91,26 @@ jobs:
             --target web --out-dir shells/web/dist
       - name: serve + safaridriver
         run: |
+          set -euo pipefail
+          PORT=8080
+          # Runner tái dùng máy trong job; server mồ côi từ step trước có thể
+          # còn giữ cổng (Errno 48). Dọn trước khi bind.
+          lsof -ti tcp:$PORT | xargs -r kill -9 2>/dev/null || true
+
           sudo safaridriver --enable
           safaridriver --port 4444 &
-          python3 -m http.server 8080 &
+          DRIVER_PID=$!
+          python3 -m http.server $PORT >/dev/null 2>&1 &
           SERVER_PID=$!
-          # Chờ server thật sự nhận kết nối trước khi giao cho Safari —
-          # `&` không đảm bảo cổng đã mở, và step trước tách shell nên server
-          # nền của nó đã chết (đây là nguyên nhân timeout POST /url).
+          # Luôn dọn cả hai tiến trình nền khi step kết thúc, kể cả khi lỗi.
+          trap 'kill $SERVER_PID $DRIVER_PID 2>/dev/null || true' EXIT
+
           for i in $(seq 1 20); do
-            curl -sf http://localhost:8080/shells/web/index.html >/dev/null && break
+            curl -sf "http://localhost:$PORT/shells/web/index.html" >/dev/null && break
             sleep 0.5
           done
+
           python3 ci/safari_check.py
-          RC=$?
-          kill $SERVER_PID 2>/dev/null || true
-          exit $RC
   lint:
     runs-on: ubuntu-latest
     steps:
