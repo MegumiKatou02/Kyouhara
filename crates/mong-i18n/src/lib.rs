@@ -49,6 +49,18 @@ impl Catalog {
         }
     }
 
+    /// Ghi đè/chèn entry vào bảng của một locale — hot reload dev
+    /// (spec-devlink, Runtime::patch_strings). Ngược với `merge_table`
+    /// (bảng cũ thắng): ở đây bản mới thắng, vì editor gửi văn bản vừa
+    /// sửa và mục đích là thay cái đang hiển thị. Chỉ đụng bản trong bộ
+    /// nhớ của phiên preview — nguồn sự thật trên đĩa do editor tự ghi.
+    pub fn update(&mut self, locale: impl Into<String>, entries: &Table) {
+        let e = self.tables.entry(locale.into()).or_default();
+        for (k, v) in entries {
+            e.insert(k.clone(), v.clone());
+        }
+    }
+
     pub fn default_locale(&self) -> &str {
         &self.default_locale
     }
@@ -128,6 +140,23 @@ mod tests {
         );
         c.set_table("en", Table::from([("a.l1".into(), "Hello".into())]));
         c
+    }
+
+    #[test]
+    fn update_ban_moi_thang_va_tao_locale_neu_chua_co() {
+        let mut c = catalog();
+        c.update(
+            "vi",
+            &Table::from([
+                ("a.l1".into(), "Chào buổi sáng".into()), // ghi đè
+                ("a.l3".into(), "Câu mới".into()),        // chèn
+            ]),
+        );
+        assert_eq!(c.resolve("vi", "a.l1"), Resolved::Exact("Chào buổi sáng"));
+        assert_eq!(c.resolve("vi", "a.l3"), Resolved::Exact("Câu mới"));
+        assert_eq!(c.resolve("vi", "a.l2"), Resolved::Exact("Tạm biệt")); // không đụng key khác
+        c.update("ja", &Table::from([("a.l1".into(), "こんにちは".into())]));
+        assert_eq!(c.resolve("ja", "a.l1"), Resolved::Exact("こんにちは"));
     }
 
     #[test]

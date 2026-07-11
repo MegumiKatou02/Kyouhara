@@ -37,6 +37,20 @@ impl Story {
         self.nodes.iter().position(|n| n.id == id)
     }
 
+    /// Thay node cùng id (hot reload dev — spec-devlink). Trả về `false` nếu
+    /// story không có node đó: thêm node mới không đi đường này mà đi
+    /// `patch_story`. Chỉ dùng qua Runtime::patch_node — VM đang chạy không
+    /// bao giờ bị mutate story giữa chừng, replay dựng VM mới.
+    pub fn replace_node(&mut self, node: Node) -> bool {
+        match self.nodes.iter_mut().find(|n| n.id == node.id) {
+            Some(slot) => {
+                *slot = node;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Hash nội dung cốt truyện (FNV-1a 64 trên JSON canonical).
     /// BTreeMap + thứ tự field cố định → cùng Story luôn cho cùng hash,
     /// trên mọi nền tảng. Save file dùng nó để phát hiện cốt truyện đã đổi.

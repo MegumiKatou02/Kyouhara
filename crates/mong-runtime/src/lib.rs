@@ -14,7 +14,9 @@ pub mod ui;
 pub use draw::{DrawItem, Fit, VIRTUAL_H, VIRTUAL_W};
 
 use mong_assets::Manifest;
-use mong_core::{PresentedChoice, SayOpts, Story, Value, VarStore, Vm, VmError, VmEvent, VmStatus};
+use mong_core::{
+    Node, PresentedChoice, SayOpts, Story, Value, VarStore, Vm, VmError, VmEvent, VmStatus,
+};
 use mong_i18n::Catalog;
 use mong_plugin::{Action, Hook, Host};
 use serde_json::json;
@@ -22,6 +24,25 @@ use std::collections::BTreeMap;
 
 pub use stage::{Stage, StageChar, Transition, TransitionKind};
 pub use text::Typewriter;
+
+/// Sự kiện điều khiển ghi lại để full-session replay khi hot reload
+/// (spec-devlink). `WaitElapsed` tách khỏi `Input::Advance`: wait hết giờ
+/// trong tick không phải input người chơi, nhưng cũng đẩy VM chạy tiếp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReplayEv {
+    Input(Input),
+    WaitElapsed,
+}
+
+/// Kết quả replay sau patch — editor cần biết dừng ở đâu nếu vấp.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatchOutcome {
+    /// Replay áp trọn log: người viết đứng lại đúng chỗ cũ với nội dung mới.
+    Full,
+    /// Log vấp tại entry thứ `applied` (vd. lựa chọn không còn tồn tại sau
+    /// sửa). Runtime dừng ở trạng thái hợp lệ ngay trước điểm vấp.
+    Stopped { applied: usize, reason: String },
+}
 
 /// Hiệu ứng rung do plugin yêu cầu — trình diễn thuần, không vào snapshot.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -51,6 +72,8 @@ pub enum Input {
 pub struct Line {
     pub speaker: Option<String>,
     pub text: String,
+    /// Key bảng chuỗi của dòng — `patch_strings` cần nó để re-resolve.
+    key: String,
     pub tw: Typewriter,
     /// `opts.exit`: giấu người nói khi dòng này bị bỏ qua.
     exit: bool,
@@ -89,6 +112,13 @@ pub struct Runtime {
     /// on_node_enter goto lẫn nhau vô hạn. Reset ở mỗi entry công khai.
     goto_left: u8,
     jump_gen: u64,
+    /// Story gốc giữ lại để dựng Vm mới khi patch (IR nhỏ, clone rẻ). Vm giữ
+    /// bản riêng của nó — bản này chỉ devlink đọc/vá.
+    story: Story,
+    /// Nguồn plugin giữ lại để dựng lại host khi replay.
+    plugin_sources: BTreeMap<String, String>,
+    /// Log điều khiển từ `start()` — nền của full-session replay (spec-devlink).
+    replay_log: Vec<ReplayEv>,
 }
 
 impl Runtime {
@@ -99,7 +129,7 @@ impl Runtime {
         locale: impl Into<String>,
     ) -> Result<Self, VmError> {
         Ok(Runtime {
-            vm: Vm::new(story)?,
+            vm: Vm::new(story.clone())?,
             catalog,
             manifest,
             locale: locale.into(),
@@ -114,6 +144,9 @@ impl Runtime {
             shake: None,
             goto_left: 8,
             jump_gen: 0,
+            story,
+            plugin_sources: BTreeMap::new(),
+            replay_log: Vec::new(),
         })
     }
 
@@ -159,6 +192,7 @@ impl Runtime {
     /// Nạp plugin từ Loaded.plugins. Gọi TRƯỚC `start()` — on_game_start
     /// bắn trong start. Lỗi biên dịch từng plugin chỉ vô hiệu plugin đó.
     pub fn set_plugins(&mut self, sources: &BTreeMap<String, String>) {
+        self.plugin_sources = sources.clone(); // giữ lại: replay dựng lại host
         if sources.is_empty() {
             self.host = None;
             return;
@@ -234,6 +268,8 @@ impl Runtime {
             if *left <= 0.0 {
                 self.wait_left = None;
                 self.step_vm()?;
+                // Log sau khi Ok: replay không được vấp vào bước đã lỗi.
+                self.replay_log.push(ReplayEv::WaitElapsed);
             }
         }
         Ok(())
@@ -241,6 +277,20 @@ impl Runtime {
 
     pub fn input(&mut self, input: Input) -> Result<(), VmError> {
         self.goto_left = 8;
+        // Advance khi đang gõ chỉ reveal_all — không đổi state VM, không log.
+        let vm_moves =
+            !(matches!(input, Input::Advance) && self.line.as_ref().is_some_and(|l| !l.tw.done()));
+        let r = self.input_inner(input);
+        // Chỉ log input VM đã nhận (Ok): Choose sai lúc trả Err và shell bỏ
+        // qua nó — replay không được vấp vào entry đó. Advance bị nuốt lúc
+        // AwaitChoice/Ended vẫn vào log: replay nuốt y hệt, vô hại.
+        if vm_moves && r.is_ok() {
+            self.replay_log.push(ReplayEv::Input(input));
+        }
+        r
+    }
+
+    fn input_inner(&mut self, input: Input) -> Result<(), VmError> {
         match input {
             // Đang gõ chữ: click đầu hiện hết dòng, click sau mới sang dòng mới.
             Input::Advance if self.line.as_ref().is_some_and(|l| !l.tw.done()) => {
@@ -267,9 +317,11 @@ impl Runtime {
                     return Err(VmError::NotAwaitingChoice);
                 }
                 let key = self.choices.get(i).map(|c| c.text.clone());
+                // choose trước, dọn sau: index vô hiệu (InvalidChoice) thì
+                // runtime còn nguyên — VM vẫn chờ, lựa chọn vẫn trên màn hình.
+                let evs = self.vm.choose(i)?;
                 self.stage_history.push(self.stage.clone());
                 self.choices.clear();
-                let evs = self.vm.choose(i)?;
                 let gen = self.jump_gen;
                 self.fire(Hook::ChoicePicked, json!({"index": i, "key": key}));
                 if self.jump_gen == gen {
@@ -410,6 +462,7 @@ impl Runtime {
             speaker: speaker.clone(),
             tw,
             text: text.clone(),
+            key: key.to_string(),
             exit: opts.exit,
             typed_fired,
         });
@@ -488,6 +541,123 @@ impl Runtime {
                 Err(e) => eprintln!("plugin goto '{node}': {e} — bo qua"),
             }
         }
+    }
+
+    /// Cập nhật văn bản trong catalog + re-resolve dòng đang hiện. Đường nóng
+    /// của DoD M6 "sửa thoại < 1s": không đụng VM, không replay.
+    ///
+    /// CHƯA COMPILE ĐƯỢC cho tới khi mong-i18n có `Catalog::update` — API
+    /// đề xuất, chưa tồn tại trong repo (xem ghi chú kèm PR).
+    pub fn patch_strings(&mut self, locale: &str, entries: &BTreeMap<String, String>) {
+        self.catalog.update(locale, entries);
+        if let Some(line) = &mut self.line {
+            let looked = self
+                .catalog
+                .text_or_key(&self.locale, &line.key)
+                .to_string();
+            // Cùng đường với begin_line: text hiển thị luôn đi qua filter
+            // plugin, nếu không patch cho ra text lệch khỏi lúc dựng dòng.
+            let new = match &mut self.host {
+                Some(h) => {
+                    let vars = vars_json(self.vm.vars());
+                    h.filter_text(line.speaker.as_deref(), &line.key, &looked, &vars)
+                }
+                None => looked,
+            };
+            if new != line.text {
+                let was_done = line.tw.done();
+                line.text = new;
+                line.tw = Typewriter::new(&line.text);
+                if was_done || self.cps <= 0.0 {
+                    line.tw.reveal_all();
+                }
+                line.typed_fired = line.tw.shown();
+            }
+        }
+        self.drain_log();
+        // choices không cần đụng: PresentedChoice giữ key, `choice_text`
+        // tra catalog lúc vẽ nên tự thấy bản mới.
+    }
+
+    /// Thay một node (hot reload) rồi replay toàn phiên trên story mới —
+    /// quyết định phát sinh M6 (spec-devlink): full-session replay thay cho
+    /// "replay từ đầu node" để không áp `set` hai lần.
+    pub fn patch_node(&mut self, node: Node) -> Result<PatchOutcome, VmError> {
+        let id = node.id.clone();
+        if !self.story.replace_node(node) {
+            return Err(VmError::UnknownNode(id));
+        }
+        self.replay_all()
+    }
+
+    /// Dựng VM mới từ `self.story` và phát lại log. Reset tại chỗ, không dựng
+    /// Runtime mới — khỏi đòi `Clone` trên Catalog/Manifest.
+    fn replay_all(&mut self) -> Result<PatchOutcome, VmError> {
+        // Dựng VM trước khi đụng phần còn lại: Err ở đây (story vá hỏng từ
+        // gốc) thì runtime cũ còn nguyên — chỉ self.story đã mang node mới,
+        // lần patch thành công kế tiếp sẽ đồng bộ lại.
+        let vm = Vm::new(self.story.clone())?;
+        let log = std::mem::take(&mut self.replay_log);
+
+        self.vm = vm;
+        self.host = if self.plugin_sources.is_empty() {
+            None
+        } else {
+            Some(Host::new(&self.plugin_sources))
+        };
+        self.drain_log();
+        self.stage = Stage::default();
+        self.stage_history.clear();
+        self.line = None;
+        self.choices.clear();
+        self.audio.clear();
+        self.wait_left = None;
+        self.shake = None;
+        self.jump_gen = 0;
+        // cps giữ nguyên: SetCps của plugin là phép gán tuyệt đối, replay
+        // tái áp cùng giá trị.
+
+        if let Err(e) = self.start() {
+            // Giữ log để lần patch sửa-cho-đúng kế tiếp vẫn replay được.
+            self.replay_log = log;
+            return Err(e);
+        }
+
+        let mut outcome = PatchOutcome::Full;
+        for (i, ev) in log.iter().enumerate() {
+            let r = match ev {
+                // Nén thời gian: mọi dòng coi như đã skip — on_type không
+                // bắn trong replay, trùng ngữ nghĩa skip đã chốt ở M5.
+                ReplayEv::Input(inp) => {
+                    if let Some(l) = &mut self.line {
+                        l.tw.reveal_all();
+                        l.typed_fired = l.tw.total();
+                    }
+                    // input() tự ghi lại entry vào replay_log mới khi Ok.
+                    self.input(*inp)
+                }
+                ReplayEv::WaitElapsed => {
+                    self.wait_left = None;
+                    let r = self.step_vm();
+                    if r.is_ok() {
+                        self.replay_log.push(ReplayEv::WaitElapsed);
+                    }
+                    r
+                }
+            };
+            if let Err(e) = r {
+                outcome = PatchOutcome::Stopped {
+                    applied: i,
+                    reason: e.to_string(),
+                };
+                break;
+            }
+        }
+        // Trình diễn tích luỹ trong replay là rác — không dội cả phiên âm
+        // thanh/rung vào frame kế tiếp.
+        self.audio.clear();
+        self.shake = None;
+        Ok(outcome)
     }
 }
 
