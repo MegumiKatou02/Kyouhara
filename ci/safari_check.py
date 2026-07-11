@@ -44,6 +44,13 @@ def main():
             time.sleep(1)
         print(f"HONG: qua {TIMEOUT_S}s khong thay __mong_ready")
         print("__mong_error =", js(sid, "return window.__mong_error || null;"))
+        # Kéo mọi thứ đã log ra để biết frame() kẹt ở đâu (adapter? panic?).
+        logs = js(sid, """
+            return (window.__mong_log || []).join('\\n');
+        """)
+        if logs:
+            print("--- console ---")
+            print(logs)
         return 1
     finally:
         call("DELETE", f"/session/{sid}")

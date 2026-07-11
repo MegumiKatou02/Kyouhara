@@ -66,7 +66,10 @@ impl State {
                 force_fallback_adapter: false,
             })
             .await
-            .expect("khong tim thay GPU");
+            .expect(
+                "khong tim thay GPU adapter — tren Safari/WebGL2 kiem tra \
+                         canvas da co kich thuoc va context WebGL2 kha dung",
+            );
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps

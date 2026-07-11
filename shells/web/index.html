@@ -10,6 +10,25 @@
 <script type="module">
   import init, { start } from "./dist/mong_web.js";
 
+  window.__mong_log = [];
+  for (const k of ["log", "warn", "error"]) {
+    const orig = console[k];
+    console[k] = (...a) => {
+      window.__mong_log.push(k + ": " + a.map(String).join(" "));
+      orig.apply(console, a);
+    };
+  }
+
+  // Panic Rust sau khi start() trả về chạy ở task spawn_local khác — khối
+  // catch bên dưới (chỉ bọc lời gọi đồng bộ) không thấy. Bắt toàn cục để
+  // CI đọc được nguyên nhân thay vì chỉ thấy "khong thay __mong_ready".
+  addEventListener("error", (e) => {
+    window.__mong_error = window.__mong_error || String(e.message || e.error || e);
+  });
+  addEventListener("unhandledrejection", (e) => {
+    window.__mong_error = window.__mong_error || String(e.reason);
+  });
+
   // winit không tự chỉnh canvas. Đặt kích thước pixel thật (CSS × dpr);
   // ResizeObserver của winit thấy và phát `Resized`.
   const canvas = document.getElementById("mong");
