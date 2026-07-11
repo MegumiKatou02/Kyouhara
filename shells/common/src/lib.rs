@@ -6,10 +6,13 @@
 //! ra ngoài — hai shell đầu cuối đều dưới 30 dòng.
 
 mod app;
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+mod devlink;
 mod state;
 
 pub use app::run;
-
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+pub use devlink::{DevServer, PatchMsg, PatchReply};
 use mong_audio::AudioSink;
 
 #[cfg(not(target_arch = "wasm32"))]

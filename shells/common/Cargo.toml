@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+dev = ["dep:tungstenite"]
+
 [dependencies]
 mong-audio = { path = "../../crates/mong-audio", default-features = false }
 mong-core = { path = "../../crates/mong-core" }
@@ -12,13 +15,15 @@ mong-render = { path = "../../crates/mong-render" }
 mong-runtime = { path = "../../crates/mong-runtime" }
 wgpu = "22"
 winit = "0.30"
-# Instant chạy cả wasm (performance.now) lẫn native. Runtime vẫn xác định:
-# shell chỉ đưa `dt` xuống, core không bao giờ đọc đồng hồ.
 web-time = "1"
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 mong-audio = { path = "../../crates/mong-audio", features = ["kira-backend"] }
 pollster = "0.3"
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wgpu = { version = "22", features = ["webgl"] }

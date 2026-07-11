@@ -4,6 +4,7 @@
 //! Trong lúc chơi: click / Space / Enter = tiếp | 1-9 = chọn | Z = lùi.
 
 fn main() {
+    env_logger::init();
     let mut args = std::env::args().skip(1);
     let Some(path) = args.next() else {
         eprintln!("cach dung: mong-desktop <thu_muc_du_an | file.mongpack> [locale]");

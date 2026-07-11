@@ -11,12 +11,16 @@
 //! trong header cho phép thêm zstd làm codec 2 sau này mà không phá định dạng.
 
 pub mod manifest;
+#[cfg(all(feature = "watch", not(target_arch = "wasm32")))]
+mod watch;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
 pub use manifest::{Asset, AssetKind, Character, Layer, LayerKind, Manifest, Scene};
 use std::fmt;
 use std::io::{self, Read, Write};
+#[cfg(all(feature = "watch", not(target_arch = "wasm32")))]
+pub use watch::{ProjectWatcher, WatchError};
 
 pub const MAGIC: &[u8; 8] = b"MONGPACK";
 pub const FORMAT_VERSION: u32 = 0;
