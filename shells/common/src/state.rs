@@ -59,6 +59,10 @@ impl State {
         let surface = instance
             .create_surface(window.clone())
             .expect("khong tao duoc surface");
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"state: truoc request_adapter".into());
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
@@ -70,6 +74,9 @@ impl State {
                 "khong tim thay GPU adapter — tren Safari/WebGL2 kiem tra \
                          canvas da co kich thuoc va context WebGL2 kha dung",
             );
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"state: sau request_adapter — co adapter".into());
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps

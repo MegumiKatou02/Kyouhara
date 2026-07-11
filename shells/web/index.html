@@ -44,14 +44,15 @@
       await init();
       const res = await fetch("../../quan.mongpack");
       if (!res.ok) throw new Error(`quan.mongpack: HTTP ${res.status}`);
+      console.log("truoc start()");
       start(new Uint8Array(await res.arrayBuffer()), null);
-      // CI đọc cờ này qua WebDriver. Renderer đã dựng xong (start trả về sau
-      // spawn_app) — panic sau đó sẽ không đặt cờ vì trang chết trước.
-      window.__mong_ready = true;
+      // KHÔNG đặt __mong_ready ở đây — cờ do Rust đặt trong frame() đầu tiên.
+      // Nếu Safari tới được dòng dưới, start() đã trả về (khác Chrome?).
+      console.log("sau start() — start da tra ve");
     } catch (e) {
       document.title = "HONG";
       window.__mong_error = String(e);
-      console.error(e);
+      console.error("catch:", e);
       throw e;
     }
 </script>
